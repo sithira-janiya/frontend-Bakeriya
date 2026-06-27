@@ -13,6 +13,7 @@ export default function OrderForm() {
   const [form, setForm] = useState(initialForm)
   const [errors, setErrors] = useState({})
   const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
   const navigate = useNavigate()
 
   function validate() {
@@ -26,16 +27,21 @@ export default function OrderForm() {
     return errs
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
+    setSubmitError('')
     const errs = validate()
     setErrors(errs)
     if (Object.keys(errs).length > 0) return
     setSubmitting(true)
-    setTimeout(() => {
-      const orderId = placeOrder(form)
+    try {
+      const orderId = await placeOrder(form)
       if (orderId) navigate(`/track/${orderId}`)
-    }, 900)
+      else setSubmitting(false)
+    } catch (err) {
+      setSubmitError(err?.message || t('order.submitFailed'))
+      setSubmitting(false)
+    }
   }
 
   if (submitting) {
@@ -129,6 +135,9 @@ export default function OrderForm() {
             />
           </Field>
 
+          {submitError && (
+            <p className="text-sm text-red-500 -mt-1" role="alert">{submitError}</p>
+          )}
           <button type="submit" className="mt-2 px-6 py-3 rounded-full bg-oven-500 text-white font-semibold hover:bg-oven-600 transition-colors">
             {t('order.placeOrder')}
           </button>

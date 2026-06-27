@@ -1,23 +1,21 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { api, ApiError, getToken, setToken, wsUrl } from '../api/client.js'
+import { menuItems as fallbackMenu } from '../data/menuData.js'
 
 /**
- * Frontend-only data layer.
+ * App data layer, backed by the Node.js + Pocketbase backend.
  *
- * Orders + cart are persisted to localStorage and broadcast across browser
- * tabs with BroadcastChannel, so opening the Chef Panel in one tab and the
- * Track Order page in another behaves like a live, real-time app.
- *
- * When the Node.js + Pocketbase backend is wired up, replace the bodies of
- * placeOrder / updateOrderStatus / loadOrders with real API + WebSocket
- * calls and keep the same context shape — pages won't need to change.
+ *  - Menu is fetched from GET /api/menu (falls back to the bundled sample menu
+ *    if the backend is unreachable, so the storefront still renders).
+ *  - Orders are created/read/updated through the REST API.
+ *  - A WebSocket (/ws) pushes live order updates: the Chef Panel sees new orders
+ *    and the customer Track page sees status changes in real time, no polling.
+ *  - Cart stays client-side (localStorage) — it's per-browser until checkout.
  */
 
 const StoreContext = createContext(null)
 
-const ORDERS_KEY = 'bakerya_orders'
 const CART_KEY = 'bakerya_cart'
-const ADMIN_AUTH_KEY = 'bakerya_admin_auth'
-export const ADMIN_PIN = '1234' // demo only — move to env/backend auth later
 
 export const ORDER_STEPS = ['pending', 'cooking', 'ready', 'completed']
 export const STEP_LABELS = {
@@ -40,65 +38,145 @@ function writeJSON(key, value) {
   try {
     localStorage.setItem(key, JSON.stringify(value))
   } catch {
-    // storage unavailable — ignore in this demo
+    /* storage unavailable — ignore */
   }
-}
-
-function makeOrderId() {
-  const ts = Date.now().toString(36).toUpperCase()
-  const rand = Math.random().toString(36).slice(2, 5).toUpperCase()
-  return `ORD-${ts}-${rand}`
 }
 
 export function StoreProvider({ children }) {
   const [cart, setCart] = useState(() => readJSON(CART_KEY, []))
-  const [orders, setOrders] = useState(() => readJSON(ORDERS_KEY, []))
-  const [isAdmin, setIsAdmin] = useState(() => sessionStorage.getItem(ADMIN_AUTH_KEY) === 'true')
-  const channelRef = useRef(null)
+  const [menu, setMenu] = useState([])
+  const [menuLoading, setMenuLoading] = useState(true)
+  const [orders, setOrders] = useState([])
+  const [orderUpdates, setOrderUpdates] = useState({}) // code -> { status, at }
+  const [adminToken, setAdminToken] = useState(() => getToken())
 
-  // Set up cross-tab live sync
+  const socketRef = useRef(null)
+  const adminTokenRef = useRef(adminToken)
+  adminTokenRef.current = adminToken
+  const isAdmin = !!adminToken
+
+  // ---- Menu ----
   useEffect(() => {
-    let channel
-    if ('BroadcastChannel' in window) {
-      channel = new BroadcastChannel('bakerya_live')
-      channel.onmessage = (event) => {
-        if (event.data?.type === 'orders-updated') {
-          setOrders(event.data.orders)
-        }
-      }
-      channelRef.current = channel
-    }
-
-    function onStorage(e) {
-      if (e.key === ORDERS_KEY) {
-        setOrders(readJSON(ORDERS_KEY, []))
-      }
-    }
-    window.addEventListener('storage', onStorage)
-
+    let cancelled = false
+    setMenuLoading(true)
+    api
+      .getMenu()
+      .then((data) => {
+        if (!cancelled) setMenu(data.items || [])
+      })
+      .catch(() => {
+        if (!cancelled) setMenu(fallbackMenu) // offline / backend down
+      })
+      .finally(() => {
+        if (!cancelled) setMenuLoading(false)
+      })
     return () => {
-      channel?.close()
-      window.removeEventListener('storage', onStorage)
+      cancelled = true
     }
   }, [])
+
+  // ---- WebSocket live updates ----
+  useEffect(() => {
+    let closedByUs = false
+    let reconnectTimer = null
+
+    function connect() {
+      let socket
+      try {
+        socket = new WebSocket(wsUrl())
+      } catch {
+        reconnectTimer = setTimeout(connect, 3000)
+        return
+      }
+      socketRef.current = socket
+
+      socket.onopen = () => {
+        if (adminTokenRef.current) {
+          socket.send(JSON.stringify({ type: 'auth', token: adminTokenRef.current }))
+        }
+      }
+
+      socket.onmessage = (event) => {
+        let msg
+        try {
+          msg = JSON.parse(event.data)
+        } catch {
+          return
+        }
+        if (msg.type === 'order:created' || msg.type === 'order:updated') {
+          // code+status arrives for everyone (lite); full order only for admins.
+          const code = msg.order?.id ?? msg.code
+          const status = msg.order?.status ?? msg.status
+          if (code && status) {
+            setOrderUpdates((prev) => ({ ...prev, [code]: { status, at: Date.now() } }))
+          }
+          if (msg.order) {
+            setOrders((prev) => mergeOrder(prev, msg.order))
+          }
+        }
+      }
+
+      socket.onclose = () => {
+        if (!closedByUs) reconnectTimer = setTimeout(connect, 3000)
+      }
+      socket.onerror = () => {
+        try {
+          socket.close()
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+
+    connect()
+    return () => {
+      closedByUs = true
+      if (reconnectTimer) clearTimeout(reconnectTimer)
+      try {
+        socketRef.current?.close()
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [])
+
+  // When an admin logs in, fetch the full order list and authenticate the socket.
+  useEffect(() => {
+    if (!adminToken) {
+      setOrders([])
+      return
+    }
+    const socket = socketRef.current
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type: 'auth', token: adminToken }))
+    }
+    let cancelled = false
+    api
+      .listOrders()
+      .then((data) => {
+        if (!cancelled) setOrders(data.orders || [])
+      })
+      .catch(() => {
+        /* token may have expired — leave list empty */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [adminToken])
 
   useEffect(() => {
     writeJSON(CART_KEY, cart)
   }, [cart])
 
-  const broadcastOrders = useCallback((next) => {
-    writeJSON(ORDERS_KEY, next)
-    channelRef.current?.postMessage({ type: 'orders-updated', orders: next })
-  }, [])
-
-  // ---- Cart ----
+  // ---- Cart (client-side) ----
   const addToCart = useCallback((item, qty = 1) => {
+    const name = typeof item.name === 'object' ? item.name : { en: item.name }
     setCart((prev) => {
       const existing = prev.find((c) => c.id === item.id)
       if (existing) {
         return prev.map((c) => (c.id === item.id ? { ...c, qty: c.qty + qty } : c))
       }
-      return [...prev, { id: item.id, name: item.name, price: item.price, emoji: item.emoji, qty }]
+      return [...prev, { id: item.id, name, price: item.price, emoji: item.emoji, qty }]
     })
   }, [])
 
@@ -118,65 +196,59 @@ export function StoreProvider({ children }) {
   const cartCount = useMemo(() => cart.reduce((sum, c) => sum + c.qty, 0), [cart])
   const cartTotal = useMemo(() => cart.reduce((sum, c) => sum + c.qty * c.price, 0), [cart])
 
-  // ---- Orders ----
+  // ---- Orders (backend) ----
+  // Returns the new order id on success; throws ApiError on failure.
   const placeOrder = useCallback(
-    (customer) => {
+    async (customer) => {
       if (cart.length === 0) return null
-      const order = {
-        id: makeOrderId(),
+      const payload = {
         customer,
-        items: cart.map((c) => ({ id: c.id, name: c.name, price: c.price, qty: c.qty })),
-        total: cart.reduce((sum, c) => sum + c.qty * c.price, 0),
-        status: 'pending',
-        createdAt: new Date().toISOString(),
-        statusHistory: [{ status: 'pending', at: new Date().toISOString() }]
+        items: cart.map((c) => ({ id: c.id, name: c.name, price: c.price, qty: c.qty }))
       }
-      setOrders((prev) => {
-        const next = [order, ...prev]
-        broadcastOrders(next)
-        return next
-      })
+      const { order } = await api.placeOrder(payload)
       clearCart()
       return order.id
     },
-    [cart, clearCart, broadcastOrders]
+    [cart, clearCart]
   )
 
-  const updateOrderStatus = useCallback(
-    (orderId, status) => {
-      setOrders((prev) => {
-        const next = prev.map((o) =>
-          o.id === orderId
-            ? { ...o, status, statusHistory: [...o.statusHistory, { status, at: new Date().toISOString() }] }
-            : o
-        )
-        broadcastOrders(next)
-        return next
-      })
-    },
-    [broadcastOrders]
-  )
+  const updateOrderStatus = useCallback(async (orderId, status) => {
+    const { order } = await api.updateOrderStatus(orderId, status)
+    setOrders((prev) => mergeOrder(prev, order))
+    return order
+  }, [])
 
-  const getOrderById = useCallback((id) => orders.find((o) => o.id === id) || null, [orders])
-
-  const findOrdersByEmail = useCallback(
-    (email) => orders.filter((o) => o.customer?.email?.toLowerCase() === email.toLowerCase()),
-    [orders]
-  )
-
-  // ---- Admin auth ----
-  const loginAdmin = useCallback((pin) => {
-    if (pin === ADMIN_PIN) {
-      sessionStorage.setItem(ADMIN_AUTH_KEY, 'true')
-      setIsAdmin(true)
-      return true
+  // Async lookups for the Track page.
+  const fetchOrder = useCallback(async (code) => {
+    try {
+      const { order } = await api.getOrder(code)
+      return order
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) return null
+      throw err
     }
-    return false
+  }, [])
+
+  const findOrdersByEmail = useCallback(async (email) => {
+    const { orders: found } = await api.findOrdersByEmail(email)
+    return found || []
+  }, [])
+
+  // ---- Admin auth (PIN -> JWT) ----
+  const loginAdmin = useCallback(async (pin) => {
+    try {
+      const { token } = await api.adminLogin(pin)
+      setToken(token)
+      setAdminToken(token)
+      return true
+    } catch {
+      return false
+    }
   }, [])
 
   const logoutAdmin = useCallback(() => {
-    sessionStorage.removeItem(ADMIN_AUTH_KEY)
-    setIsAdmin(false)
+    setToken(null)
+    setAdminToken(null)
   }, [])
 
   const value = {
@@ -187,10 +259,13 @@ export function StoreProvider({ children }) {
     clearCart,
     cartCount,
     cartTotal,
+    menu,
+    menuLoading,
     orders,
+    orderUpdates,
     placeOrder,
     updateOrderStatus,
-    getOrderById,
+    fetchOrder,
     findOrdersByEmail,
     isAdmin,
     loginAdmin,
@@ -198,6 +273,14 @@ export function StoreProvider({ children }) {
   }
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
+}
+
+function mergeOrder(list, order) {
+  const idx = list.findIndex((o) => o.id === order.id)
+  if (idx === -1) return [order, ...list]
+  const next = [...list]
+  next[idx] = order
+  return next
 }
 
 export function useStore() {

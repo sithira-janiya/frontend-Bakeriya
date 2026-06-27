@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { Search, ChefHat, CheckCircle2, Clock3 } from 'lucide-react'
 import { useStore } from '../context/StoreContext.jsx'
@@ -9,29 +9,71 @@ import CookingScene from '../components/CookingScene.jsx'
 export default function OrderStatus() {
   const { orderId } = useParams()
   const navigate = useNavigate()
-  const { getOrderById, findOrdersByEmail } = useStore()
+  const { fetchOrder, findOrdersByEmail, orderUpdates } = useStore()
   const { t, language } = useLanguage()
+
   const [lookup, setLookup] = useState('')
   const [notFound, setNotFound] = useState(false)
+  const [searching, setSearching] = useState(false)
 
-  function handleLookup(e) {
+  const [order, setOrder] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState(false)
+
+  // Fetch the tracked order whenever the id changes.
+  useEffect(() => {
+    if (!orderId) {
+      setOrder(null)
+      return
+    }
+    let cancelled = false
+    setLoading(true)
+    setLoadError(false)
+    fetchOrder(orderId)
+      .then((found) => {
+        if (!cancelled) setOrder(found)
+      })
+      .catch(() => {
+        if (!cancelled) setLoadError(true)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [orderId, fetchOrder])
+
+  // Live status: a WebSocket push for this order overrides the fetched status.
+  const liveStatus = orderId ? orderUpdates[orderId]?.status : undefined
+  const effectiveStatus = liveStatus || order?.status
+
+  async function handleLookup(e) {
     e.preventDefault()
     const value = lookup.trim()
     if (!value) return
-    if (value.includes('@')) {
-      const matches = findOrdersByEmail(value)
-      if (matches.length > 0) {
-        navigate(`/track/${matches[0].id}`)
-        return
+    setSearching(true)
+    setNotFound(false)
+    try {
+      if (value.includes('@')) {
+        const matches = await findOrdersByEmail(value)
+        if (matches.length > 0) {
+          navigate(`/track/${matches[0].id}`)
+          return
+        }
+      } else {
+        const found = await fetchOrder(value.toUpperCase())
+        if (found) {
+          navigate(`/track/${found.id}`)
+          return
+        }
       }
-    } else {
-      const order = getOrderById(value.toUpperCase())
-      if (order) {
-        navigate(`/track/${order.id}`)
-        return
-      }
+      setNotFound(true)
+    } catch {
+      setNotFound(true)
+    } finally {
+      setSearching(false)
     }
-    setNotFound(true)
   }
 
   if (!orderId) {
@@ -50,8 +92,8 @@ export default function OrderStatus() {
             placeholder={t('track.placeholder')}
             className="flex-1 border border-crust-200 rounded-full px-4 py-2.5 outline-none focus:border-oven-500 min-w-0"
           />
-          <button type="submit" className="px-5 py-2.5 rounded-full bg-oven-500 text-white font-semibold hover:bg-oven-600 shrink-0 whitespace-nowrap">
-            {t('track.find')}
+          <button type="submit" disabled={searching} className="px-5 py-2.5 rounded-full bg-oven-500 text-white font-semibold hover:bg-oven-600 shrink-0 whitespace-nowrap disabled:opacity-60">
+            {searching ? t('track.searching') : t('track.find')}
           </button>
         </form>
         {notFound && <p className="text-sm text-red-500 mt-3 text-center">{t('track.notFoundSearch')}</p>}
@@ -59,7 +101,25 @@ export default function OrderStatus() {
     )
   }
 
-  const order = getOrderById(orderId)
+  if (loading) {
+    return (
+      <div className="max-w-md mx-auto px-4 py-20 text-center text-crust-500">
+        {t('track.loading')}
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="max-w-md mx-auto px-4 py-20 text-center">
+        <h1 className="text-2xl font-bold mb-2">{t('track.errorTitle')}</h1>
+        <p className="text-crust-600 mb-6">{t('track.errorDesc')}</p>
+        <Link to="/track" className="px-6 py-3 rounded-full bg-oven-500 text-white font-semibold hover:bg-oven-600 inline-block">
+          {t('track.tryAnotherLookup')}
+        </Link>
+      </div>
+    )
+  }
 
   if (!order) {
     return (
@@ -73,7 +133,12 @@ export default function OrderStatus() {
     )
   }
 
-  const StatusIcon = order.status === 'ready' || order.status === 'completed' ? CheckCircle2 : order.status === 'cooking' ? ChefHat : Clock3
+  const StatusIcon =
+    effectiveStatus === 'ready' || effectiveStatus === 'completed'
+      ? CheckCircle2
+      : effectiveStatus === 'cooking'
+        ? ChefHat
+        : Clock3
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-12">
@@ -84,11 +149,11 @@ export default function OrderStatus() {
       </div>
 
       <div className="bg-white border border-crust-200 rounded-2xl p-6 mb-6">
-        <OrderStepper status={order.status} />
+        <OrderStepper status={effectiveStatus} />
       </div>
 
       <div className="bg-oven-50 border border-oven-200 rounded-2xl p-5 flex items-center gap-4 mb-6">
-        {order.status === 'cooking' ? (
+        {effectiveStatus === 'cooking' ? (
           <div className="w-20 shrink-0">
             <CookingScene size="sm" />
           </div>
@@ -96,8 +161,8 @@ export default function OrderStatus() {
           <StatusIcon className="text-oven-600 shrink-0" size={28} />
         )}
         <div className="min-w-0">
-          <div className="font-semibold text-oven-700 break-words">{t(`status.${order.status}`)}</div>
-          <div className="text-sm text-oven-700/80 break-words">{t(`statusMsg.${order.status}`)}</div>
+          <div className="font-semibold text-oven-700 break-words">{t(`status.${effectiveStatus}`)}</div>
+          <div className="text-sm text-oven-700/80 break-words">{t(`statusMsg.${effectiveStatus}`)}</div>
         </div>
       </div>
 

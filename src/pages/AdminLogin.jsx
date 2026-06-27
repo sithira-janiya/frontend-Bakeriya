@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChefHat, Lock } from 'lucide-react'
 import { useStore } from '../context/StoreContext.jsx'
@@ -9,15 +9,20 @@ export default function AdminLogin() {
   const { t } = useLanguage()
   const [pin, setPin] = useState('')
   const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
   const navigate = useNavigate()
 
-  if (isAdmin) {
-    navigate('/admin', { replace: true })
-  }
+  useEffect(() => {
+    if (isAdmin) navigate('/admin', { replace: true })
+  }, [isAdmin, navigate])
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
-    if (loginAdmin(pin)) {
+    setError('')
+    setBusy(true)
+    const ok = await loginAdmin(pin)
+    setBusy(false)
+    if (ok) {
       navigate('/admin')
     } else {
       setError(t('chef.incorrectPin'))
@@ -38,20 +43,19 @@ export default function AdminLogin() {
           <Lock size={16} className="text-crust-400" />
           <input
             type="password"
-            inputMode="numeric"
             value={pin}
             onChange={(e) => setPin(e.target.value)}
             placeholder={t('chef.pinPlaceholder')}
             className="flex-1 outline-none bg-transparent min-w-0"
+            autoComplete="current-password"
             autoFocus
           />
         </div>
         {error && <p className="text-sm text-red-500 text-center">{error}</p>}
-        <button type="submit" className="px-5 py-2.5 rounded-full bg-oven-500 text-white font-semibold hover:bg-oven-600">
-          {t('chef.enterPanel')}
+        <button type="submit" disabled={busy} className="px-5 py-2.5 rounded-full bg-oven-500 text-white font-semibold hover:bg-oven-600 disabled:opacity-60">
+          {busy ? t('chef.signingIn') : t('chef.enterPanel')}
         </button>
       </form>
-      <p className="text-xs text-crust-400 text-center mt-4">{t('chef.demoPin')}</p>
     </div>
   )
 }

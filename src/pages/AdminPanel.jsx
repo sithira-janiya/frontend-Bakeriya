@@ -1,8 +1,10 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { LogOut, ChefHat, Clock3, PackageCheck, Home, Phone, Mail } from 'lucide-react'
+import { LogOut, ChefHat, Clock3, PackageCheck, Home, Phone, Mail, MapPin } from 'lucide-react'
 import { useStore, ORDER_STEPS } from '../context/StoreContext.jsx'
 import { useLanguage } from '../context/LanguageContext.jsx'
+import MenuManager from '../components/MenuManager.jsx'
+import KitchenDisplaySettings, { loadDisplay, saveDisplay } from '../components/KitchenDisplaySettings.jsx'
 
 const NEXT_STATUS = { pending: 'cooking', cooking: 'ready', ready: 'completed' }
 const ACTION_KEY = { pending: 'chef.startCooking', cooking: 'chef.markReady', ready: 'chef.markCollected' }
@@ -12,6 +14,13 @@ export default function AdminPanel() {
   const { orders, updateOrderStatus, logoutAdmin } = useStore()
   const { t, language } = useLanguage()
   const navigate = useNavigate()
+  const [tab, setTab] = useState('orders')
+  const [display, setDisplay] = useState(loadDisplay)
+
+  function updateDisplay(next) {
+    setDisplay(next)
+    saveDisplay(next)
+  }
 
   const grouped = useMemo(() => {
     const g = { pending: [], cooking: [], ready: [], completed: [] }
@@ -29,6 +38,14 @@ export default function AdminPanel() {
     navigate('/')
   }
 
+  async function advance(orderId, nextStatus) {
+    try {
+      await updateOrderStatus(orderId, nextStatus)
+    } catch {
+      // WS will still reconcile on the next broadcast; ignore transient errors
+    }
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-6 gap-3">
@@ -43,11 +60,37 @@ export default function AdminPanel() {
         </button>
       </div>
 
-      <div className="grid md:grid-cols-4 gap-4">
+      {/* Orders | Menu tabs */}
+      <div className="flex gap-1 mb-5 border-b border-crust-200">
+        {[
+          ['orders', 'Orders'],
+          ['menu', 'Menu'],
+          ['display', 'Display']
+        ].map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${
+              tab === key
+                ? 'border-oven-500 text-oven-700'
+                : 'border-transparent text-crust-500 hover:text-crust-800'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'menu' && <MenuManager />}
+
+      {tab === 'display' && <KitchenDisplaySettings value={display} onChange={updateDisplay} />}
+
+      {tab === 'orders' && (
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {ORDER_STEPS.map((status) => {
           const Icon = COLUMN_ICON[status]
           return (
-            <div key={status} className="bg-crust-100 rounded-2xl p-3 flex flex-col gap-3 min-h-[60vh]">
+            <div key={status} className="bg-crust-100 rounded-2xl p-3 flex flex-col gap-3 min-h-[40vh] md:min-h-[60vh]">
               <div className="flex items-center gap-2 px-1 min-w-0">
                 <Icon size={18} className="text-crust-600 shrink-0" />
                 <h2 className="font-semibold text-crust-800 truncate">{t(`status.${status}`)}</h2>
@@ -64,13 +107,27 @@ export default function AdminPanel() {
                   <div key={order.id} className="bg-white border border-crust-200 rounded-xl p-3 flex flex-col gap-2">
                     <div className="flex items-center justify-between">
                       <span className="font-mono text-xs font-bold text-crust-700">{order.id}</span>
-                      <span className="text-xs text-crust-400">{new Date(order.createdAt).toLocaleTimeString()}</span>
+                      {display.time && (
+                        <span className="text-xs text-crust-400">{new Date(order.createdAt).toLocaleTimeString()}</span>
+                      )}
                     </div>
-                    <div className="text-sm font-semibold">{order.customer.name}</div>
-                    <div className="text-xs text-crust-500 flex flex-col gap-0.5">
-                      <span className="flex items-center gap-1"><Phone size={11} /> {order.customer.phone}</span>
-                      <span className="flex items-center gap-1"><Mail size={11} /> {order.customer.email}</span>
-                    </div>
+                    {display.name && <div className="text-sm font-semibold">{order.customer.name}</div>}
+                    {(display.phone || display.email || display.address) && (
+                      <div className="text-xs text-crust-500 flex flex-col gap-0.5">
+                        {display.phone && order.customer.phone && (
+                          <span className="flex items-center gap-1"><Phone size={11} /> {order.customer.phone}</span>
+                        )}
+                        {display.email && order.customer.email && (
+                          <span className="flex items-center gap-1"><Mail size={11} /> {order.customer.email}</span>
+                        )}
+                        {display.address && order.customer.address && (
+                          <span className="flex items-start gap-1">
+                            <MapPin size={11} className="mt-0.5 shrink-0" />
+                            <span className="break-words">{order.customer.address}</span>
+                          </span>
+                        )}
+                      </div>
+                    )}
                     <ul className="text-xs text-crust-700 border-t border-crust-100 pt-2">
                       {order.items.map((item) => {
                         const itemName = typeof item.name === 'object' ? item.name[language] ?? item.name.en : item.name
@@ -79,13 +136,15 @@ export default function AdminPanel() {
                         )
                       })}
                     </ul>
-                    <div className="flex items-center justify-between text-sm font-semibold pt-1">
-                      <span>{t('chef.total')}</span>
-                      <span>${order.total.toFixed(2)}</span>
-                    </div>
+                    {display.total && (
+                      <div className="flex items-center justify-between text-sm font-semibold pt-1">
+                        <span>{t('chef.total')}</span>
+                        <span>${order.total.toFixed(2)}</span>
+                      </div>
+                    )}
                     {NEXT_STATUS[status] && (
                       <button
-                        onClick={() => updateOrderStatus(order.id, NEXT_STATUS[status])}
+                        onClick={() => advance(order.id, NEXT_STATUS[status])}
                         className="mt-1 px-3 py-2 rounded-full bg-oven-500 text-white text-xs font-semibold hover:bg-oven-600 transition-colors break-words"
                       >
                         {t(ACTION_KEY[status])}
@@ -98,6 +157,7 @@ export default function AdminPanel() {
           )
         })}
       </div>
+      )}
     </div>
   )
 }

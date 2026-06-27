@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ShoppingBag, ArrowRight } from 'lucide-react'
-import { menuItems } from '../data/menuData.js'
 import ItemCard from '../components/ItemCard.jsx'
 import FilterBar from '../components/FilterBar.jsx'
 import { useStore } from '../context/StoreContext.jsx'
@@ -9,12 +8,12 @@ import { useLanguage } from '../context/LanguageContext.jsx'
 
 export default function Menu() {
   const [filters, setFilters] = useState({ category: 'All', tags: [], search: '', sort: 'default' })
-  const { cartCount, cartTotal } = useStore()
+  const { cartCount, cartTotal, menu, menuLoading } = useStore()
   const { t, language } = useLanguage()
   const navigate = useNavigate()
 
   const filtered = useMemo(() => {
-    let items = [...menuItems]
+    let items = [...menu]
     if (filters.category !== 'All') {
       items = items.filter((i) => i.category === filters.category)
     }
@@ -38,7 +37,7 @@ export default function Menu() {
       items.sort((a, b) => (a.name[language] ?? a.name.en).localeCompare(b.name[language] ?? b.name.en))
     }
     return items
-  }, [filters, language])
+  }, [filters, language, menu])
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-10 pb-28">
@@ -51,7 +50,9 @@ export default function Menu() {
         <FilterBar filters={filters} setFilters={setFilters} />
       </div>
 
-      {filtered.length === 0 ? (
+      {menuLoading ? (
+        <div className="text-center py-16 text-crust-500">{t('menu.loading')}</div>
+      ) : filtered.length === 0 ? (
         <div className="text-center py-16 text-crust-500">{t('menu.noItems')}</div>
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
