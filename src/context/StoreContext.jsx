@@ -48,12 +48,16 @@ export function StoreProvider({ children }) {
   const [menuLoading, setMenuLoading] = useState(true)
   const [orders, setOrders] = useState([])
   const [orderUpdates, setOrderUpdates] = useState({}) // code -> { status, at }
-  const [adminToken, setAdminToken] = useState(() => getToken())
+  const [token, setTokenState] = useState(() => getToken())
+  const [authUser, setAuthUser] = useState(null)
+  const [authLoading, setAuthLoading] = useState(!!getToken())
+
+  const isAdmin = authUser?.role === 'admin'
+  const currentUser = authUser?.role === 'customer' ? authUser : null
 
   const socketRef = useRef(null)
-  const adminTokenRef = useRef(adminToken)
-  adminTokenRef.current = adminToken
-  const isAdmin = !!adminToken
+  const authRef = useRef({ token, isAdmin })
+  authRef.current = { token, isAdmin }
 
   // ---- Menu ----
   useEffect(() => {
@@ -91,8 +95,9 @@ export function StoreProvider({ children }) {
       socketRef.current = socket
 
       socket.onopen = () => {
-        if (adminTokenRef.current) {
-          socket.send(JSON.stringify({ type: 'auth', token: adminTokenRef.current }))
+        const { token: tok, isAdmin: admin } = authRef.current
+        if (tok && admin) {
+          socket.send(JSON.stringify({ type: 'auth', token: tok }))
         }
       }
 
@@ -140,15 +145,45 @@ export function StoreProvider({ children }) {
     }
   }, [])
 
-  // When an admin logs in, fetch the full order list and authenticate the socket.
+  // Hydrate the signed-in principal from the stored token (validates it too).
   useEffect(() => {
-    if (!adminToken) {
+    if (!token) {
+      setAuthUser(null)
+      setAuthLoading(false)
+      return
+    }
+    let cancelled = false
+    setAuthLoading(true)
+    api
+      .me()
+      .then((data) => {
+        if (cancelled) return
+        const u = data.user || {}
+        setAuthUser(u.role ? u : { ...u, role: 'customer' })
+      })
+      .catch(() => {
+        if (cancelled) return
+        setToken(null)
+        setTokenState(null)
+        setAuthUser(null)
+      })
+      .finally(() => {
+        if (!cancelled) setAuthLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [token])
+
+  // When an admin is signed in, fetch the full order list and authenticate the socket.
+  useEffect(() => {
+    if (!isAdmin) {
       setOrders([])
       return
     }
     const socket = socketRef.current
     if (socket && socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify({ type: 'auth', token: adminToken }))
+      socket.send(JSON.stringify({ type: 'auth', token }))
     }
     let cancelled = false
     api
@@ -162,7 +197,7 @@ export function StoreProvider({ children }) {
     return () => {
       cancelled = true
     }
-  }, [adminToken])
+  }, [isAdmin, token])
 
   useEffect(() => {
     writeJSON(CART_KEY, cart)
@@ -234,22 +269,46 @@ export function StoreProvider({ children }) {
     return found || []
   }, [])
 
-  // ---- Admin auth (PIN -> JWT) ----
-  const loginAdmin = useCallback(async (pin) => {
-    try {
-      const { token } = await api.adminLogin(pin)
-      setToken(token)
-      setAdminToken(token)
-      return true
-    } catch {
-      return false
-    }
+  // ---- Auth (admin + customer share one JWT slot) ----
+  const applyAuth = useCallback((data) => {
+    setToken(data.token)
+    setTokenState(data.token)
+    const u = data.user ? { ...data.user, role: data.role } : { role: data.role }
+    setAuthUser(u)
+    return data.role
   }, [])
 
-  const logoutAdmin = useCallback(() => {
+  const login = useCallback(
+    async (identifier, password) => applyAuth(await api.login(identifier, password)),
+    [applyAuth]
+  )
+  const register = useCallback(async (payload) => applyAuth(await api.register(payload)), [applyAuth])
+  const googleLogin = useCallback(
+    async (credential) => applyAuth(await api.googleLogin(credential)),
+    [applyAuth]
+  )
+  const logout = useCallback(() => {
     setToken(null)
-    setAdminToken(null)
+    setTokenState(null)
+    setAuthUser(null)
   }, [])
+
+  const requestPasswordPin = useCallback(() => api.requestPasswordPin(), [])
+  const changePassword = useCallback((pin, newPassword) => api.changePassword(pin, newPassword), [])
+
+  // Legacy aliases — existing admin pages keep working until Phase 3 moves them
+  // to the unified /login page. Admin signs in with username `admin` + password.
+  const loginAdmin = useCallback(
+    async (secret) => {
+      try {
+        return (await login('admin', secret)) === 'admin'
+      } catch {
+        return false
+      }
+    },
+    [login]
+  )
+  const logoutAdmin = logout
 
   const value = {
     cart,
@@ -268,6 +327,14 @@ export function StoreProvider({ children }) {
     fetchOrder,
     findOrdersByEmail,
     isAdmin,
+    currentUser,
+    authLoading,
+    login,
+    register,
+    googleLogin,
+    logout,
+    requestPasswordPin,
+    changePassword,
     loginAdmin,
     logoutAdmin
   }

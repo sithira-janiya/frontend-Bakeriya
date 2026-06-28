@@ -2,14 +2,136 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ---- Smooth theme cross-fade ----
+   Animate color/shadow-related properties everywhere so flipping `.dark`
+   eases cards, text, borders and shadows instead of snapping. Lives in
+   @layer base so Tailwind's `transition-*` utilities (hover micro-interactions)
+   still win where they're applied. */
+@layer base {
+  *,
+  *::before,
+  *::after {
+    transition-property: background-color, border-color, color, fill, stroke, box-shadow, text-decoration-color;
+    transition-duration: 0.35s;
+    transition-timing-function: ease;
+  }
+}
+
+/* ---- Theme tokens (light + dark) ----
+   Tailwind's `crust` colors resolve to these CSS variables, so toggling the
+   `.dark` class on <html> reskins the entire UI. `oven` accent stays constant. */
+:root {
+  --c-50: 253 248 240;
+  --c-100: 250 240 220;
+  --c-200: 243 221 179;
+  --c-300: 233 196 133;
+  --c-400: 219 164 85;
+  --c-500: 204 138 58;
+  --c-600: 176 111 44;
+  --c-700: 140 85 36;
+  --c-800: 111 68 34;
+  --c-900: 92 57 31;
+  --surface: 255 255 255;
+}
+
+html.dark {
+  --c-50: 24 20 16;
+  --c-100: 32 27 22;
+  --c-200: 46 39 32;
+  --c-300: 64 55 46;
+  --c-400: 92 80 67;
+  --c-500: 150 136 118;
+  --c-600: 178 164 145;
+  --c-700: 205 193 175;
+  --c-800: 230 222 210;
+  --c-900: 245 240 232;
+  --surface: 38 32 26;
+  --ink: 56 48 40;
+  --ink-hover: 70 60 50;
+}
+
+/* Cards use literal bg-white → flip to the themed surface in dark mode. */
+html.dark .bg-white {
+  background-color: rgb(var(--surface));
+}
+
+/* Form fields default to a light browser background → theme them in dark mode. */
+html.dark input,
+html.dark textarea,
+html.dark select {
+  background-color: rgb(var(--surface));
+  color: rgb(var(--c-900));
+}
+
+/* Dark "filled" chrome (cart bar, footer, active filter, admin badge) uses
+   crust-800/900 as a surface; the inverted scale would make them light, so pin
+   them to an elevated dark tone. Their text stays light. */
+html.dark .bg-crust-800,
+html.dark .bg-crust-900 {
+  background-color: rgb(var(--ink));
+}
+html.dark .hover\:bg-crust-800:hover,
+html.dark .hover\:bg-crust-900:hover {
+  background-color: rgb(var(--ink-hover));
+}
+
+/* Footer is dark-on-purpose in both themes; keep its light crust text readable. */
+html.dark footer .text-crust-100 {
+  color: rgb(var(--c-800));
+}
+html.dark footer .text-crust-300,
+html.dark footer .text-crust-400 {
+  color: rgb(var(--c-600));
+}
+
 html {
   scroll-behavior: smooth;
 }
 
 body {
   @apply bg-crust-50 text-crust-900 font-body;
+  position: relative;
   font-family: 'Nunito', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans Sinhala',
     'Iskoola Pota', sans-serif;
+  transition: background-color 0.35s ease, color 0.35s ease;
+}
+
+/* ---- Animated themed background ----
+   Soft drifting gradient blobs behind all content. Colors are pulled from the
+   `crust` + `oven` CSS variables, so it re-tints automatically on theme flip. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 18% 22%, rgb(var(--c-100) / 0.75), transparent 45%),
+    radial-gradient(circle at 82% 8%, rgba(232, 112, 42, 0.1), transparent 42%),
+    radial-gradient(circle at 50% 100%, rgb(var(--c-200) / 0.55), transparent 52%);
+  background-size: 200% 200%;
+  animation: bgDrift 20s ease-in-out infinite alternate;
+  transition: background-color 0.35s ease;
+}
+
+@keyframes bgDrift {
+  0% {
+    background-position: 0% 0%, 100% 0%, 50% 100%;
+  }
+  100% {
+    background-position: 100% 100%, 0% 100%, 50% 0%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::before {
+    animation: none;
+  }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+  }
 }
 
 h1, h2, h3, h4 {
@@ -43,7 +165,7 @@ button {
   width: 6px;
 }
 .scroll-thin::-webkit-scrollbar-thumb {
-  background-color: #e9c485;
+  background-color: rgb(var(--c-300));
   border-radius: 4px;
 }
 

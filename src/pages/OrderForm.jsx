@@ -4,6 +4,7 @@ import { Minus, Plus, Trash2, ShoppingBag } from 'lucide-react'
 import { useStore } from '../context/StoreContext.jsx'
 import { useLanguage } from '../context/LanguageContext.jsx'
 import LoadingScreen from '../components/LoadingScreen.jsx'
+import OrderSuccess from '../components/OrderSuccess.jsx'
 
 const initialForm = { name: '', address: '', email: '', phone: '' }
 
@@ -14,6 +15,7 @@ export default function OrderForm() {
   const [errors, setErrors] = useState({})
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
+  const [placedId, setPlacedId] = useState(null)
   const navigate = useNavigate()
 
   function validate() {
@@ -36,12 +38,22 @@ export default function OrderForm() {
     setSubmitting(true)
     try {
       const orderId = await placeOrder(form)
-      if (orderId) navigate(`/track/${orderId}`)
+      if (orderId) setPlacedId(orderId)
       else setSubmitting(false)
     } catch (err) {
       setSubmitError(err?.message || t('order.submitFailed'))
       setSubmitting(false)
     }
+  }
+
+  if (placedId) {
+    return (
+      <OrderSuccess
+        orderId={placedId}
+        onTrack={() => navigate(`/track/${placedId}`)}
+        onContinue={() => navigate('/menu')}
+      />
+    )
   }
 
   if (submitting) {

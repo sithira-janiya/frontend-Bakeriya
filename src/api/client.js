@@ -10,7 +10,9 @@
 // reloads; it's attached as a Bearer token on protected calls.
 
 const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
-const TOKEN_KEY = 'bakerya_admin_token'
+// Single JWT for the signed-in principal (admin or customer). Admin-only API
+// calls still reject a customer token server-side (requireAdmin checks role).
+const TOKEN_KEY = 'bakerya_token'
 
 export function getToken() {
   try {
@@ -89,7 +91,16 @@ export const api = {
   listOrders: () => request('/orders', { auth: true }),
   updateOrderStatus: (code, status) =>
     request(`/orders/${encodeURIComponent(code)}/status`, { method: 'PATCH', body: { status }, auth: true }),
-  adminLogin: (pin) => request('/admin/login', { method: 'POST', body: { pin } }),
+
+  // Auth (admin + customer share /auth/login; admin uses username `admin`).
+  register: (payload) => request('/auth/register', { method: 'POST', body: payload }),
+  login: (identifier, password) =>
+    request('/auth/login', { method: 'POST', body: { username: identifier, password } }),
+  googleLogin: (credential) => request('/auth/google', { method: 'POST', body: { credential } }),
+  me: () => request('/auth/me', { auth: true }),
+  requestPasswordPin: () => request('/auth/password/request-pin', { method: 'POST', auth: true }),
+  changePassword: (pin, newPassword) =>
+    request('/auth/password/change', { method: 'POST', body: { pin, newPassword }, auth: true }),
 
   // Menu admin (chef): full list incl. hidden items + add / update / remove.
   getMenuAdmin: () => request('/menu/admin', { auth: true }),

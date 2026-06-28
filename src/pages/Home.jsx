@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { Search, ChefHat, Bell, PackageCheck, ArrowRight } from 'lucide-react'
 import { menuItems } from '../data/menuData.js'
 import ItemCard from '../components/ItemCard.jsx'
+import HeroScene from '../components/three/HeroScene.jsx'
 import { useLanguage } from '../context/LanguageContext.jsx'
 
 export default function Home() {
@@ -17,7 +18,7 @@ export default function Home() {
 
   return (
     <div>
-      <section className="bg-gradient-to-b from-crust-100 to-crust-50">
+      <section className="bg-gradient-to-b from-crust-100/70 to-crust-50/30">
         <div className="max-w-6xl mx-auto px-4 py-16 md:py-24 grid md:grid-cols-2 gap-10 items-center">
           <div>
             <span className="inline-block bg-oven-100 text-oven-700 text-xs font-bold uppercase tracking-wide px-3 py-1 rounded-full mb-4">
@@ -36,8 +37,8 @@ export default function Home() {
               </Link>
             </div>
           </div>
-          <div className="flex items-center justify-center text-[120px] md:text-[180px] leading-none select-none">
-            🥐🍞🎂
+          <div className="h-72 sm:h-96 md:h-[440px] w-full cursor-grab active:cursor-grabbing">
+            <HeroScene />
           </div>
         </div>
       </section>
