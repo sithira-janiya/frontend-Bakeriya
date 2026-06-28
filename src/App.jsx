@@ -8,9 +8,12 @@ import Home from './pages/Home.jsx'
 import Menu from './pages/Menu.jsx'
 import OrderForm from './pages/OrderForm.jsx'
 import OrderStatus from './pages/OrderStatus.jsx'
-import AdminLogin from './pages/AdminLogin.jsx'
+import Login from './pages/Login.jsx'
+import Register from './pages/Register.jsx'
+import CustomerDashboard from './pages/CustomerDashboard.jsx'
 import AdminPanel from './pages/AdminPanel.jsx'
 import NotFound from './pages/NotFound.jsx'
+import { Navigate } from 'react-router-dom'
 
 export default function App() {
   const [booting, setBooting] = useState(true)
@@ -38,11 +41,22 @@ export default function App() {
         <Route path="/order" element={<OrderForm />} />
         <Route path="/track" element={<OrderStatus />} />
         <Route path="/track/:orderId" element={<OrderStatus />} />
-        <Route path="/admin/login" element={<AdminLogin />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        {/* legacy admin login link -> unified login */}
+        <Route path="/admin/login" element={<Navigate to="/login" replace />} />
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute role="customer">
+              <CustomerDashboard />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/admin"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute role="admin">
               <AdminPanel />
             </ProtectedRoute>
           }

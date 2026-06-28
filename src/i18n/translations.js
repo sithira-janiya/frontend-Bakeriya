@@ -101,6 +101,14 @@ export const translations = {
     'order.cartEmptyDesc': 'Add some fresh bakes from the menu before placing an order.',
     'order.browseMenu': 'Browse Menu',
     'order.sendingToKitchen': 'Sending your order to the kitchen',
+    'order.successTitle': 'Order placed!',
+    'order.successDesc': 'Thank you! Your fresh bakes are now with our kitchen.',
+    'order.orderNumber': 'Order number',
+    'order.eta': 'Estimated ready in',
+    'order.etaValue': '25–35 min',
+    'order.trackNow': 'Track Order',
+    'order.continueShopping': 'Continue Shopping',
+    'order.redirecting': 'Taking you to live tracking…',
     'app.preheating': 'Preheating the ovens',
 
     // Form validation errors
@@ -269,6 +277,14 @@ export const translations = {
     'order.cartEmptyDesc': 'ඇණවුමක් තැබීමට පෙර මෙනුවෙන් අලුත් ආහාර කරත්තයට එක් කරන්න.',
     'order.browseMenu': 'මෙනුව බලන්න',
     'order.sendingToKitchen': 'ඔබගේ ඇණවුම කුස්සියට යයි',
+    'order.successTitle': 'ඇණවුම තැබුවා!',
+    'order.successDesc': 'ස්තූතියි! ඔබගේ අලුත් ආහාර දැන් අපගේ කුස්සියට ලැබී ඇත.',
+    'order.orderNumber': 'ඇණවුම් අංකය',
+    'order.eta': 'ඇස්තමේන්තුගත සූදානම් වේලාව',
+    'order.etaValue': 'මිනිත්තු 25–35',
+    'order.trackNow': 'ඇණවුම පරීක්ෂා කරන්න',
+    'order.continueShopping': 'සාප්පු සවාරිය දිගටම',
+    'order.redirecting': 'සජීවී ලුහුබැඳීමට ඔබව ගෙන යමින්…',
     'app.preheating': 'උඳුන රත් කරමින්',
 
     // Form validation errors
