@@ -1,6 +1,7 @@
 import { useRef } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { useTheme } from '../../context/ThemeContext.jsx'
+import CanvasErrorBoundary from './CanvasErrorBoundary.jsx'
 
 /**
  * 3D port of the CookingScene: a chef leaning over a steaming soup pot, dipping
@@ -224,12 +225,14 @@ export default function LoaderScene() {
 
   return (
     <div aria-hidden className="h-48 w-48 sm:h-56 sm:w-56 pointer-events-none">
+      <CanvasErrorBoundary>
       <Canvas camera={{ position: [0, 0.2, 6], fov: 42 }} dpr={[1, 1.5]} gl={{ antialias: true, alpha: true }}>
         <ambientLight intensity={dark ? 0.55 : 0.95} />
         <directionalLight position={[4, 6, 5]} intensity={1.1} />
         <pointLight position={[-4, 1, 3]} intensity={0.5} color={COL.soup} />
         <Scene />
       </Canvas>
+      </CanvasErrorBoundary>
     </div>
   )
 }

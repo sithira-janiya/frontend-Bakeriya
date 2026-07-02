@@ -3,6 +3,7 @@ import { Canvas } from '@react-three/fiber'
 import { Float } from '@react-three/drei'
 import { useTheme } from '../../context/ThemeContext.jsx'
 import { BAKERY_SHAPES } from './BakeryShapes.jsx'
+import CanvasErrorBoundary from './CanvasErrorBoundary.jsx'
 
 /**
  * Site-wide ambient 3D layer: a fixed, non-interactive canvas of slowly
@@ -31,6 +32,7 @@ export default function SceneBackground() {
 
   return (
     <div aria-hidden className="fixed inset-0 -z-[1] pointer-events-none">
+      <CanvasErrorBoundary>
       <Canvas
         camera={{ position: [0, 0, 8], fov: 45 }}
         dpr={[1, 1.5]}
@@ -45,6 +47,7 @@ export default function SceneBackground() {
           </Float>
         ))}
       </Canvas>
+      </CanvasErrorBoundary>
     </div>
   )
 }

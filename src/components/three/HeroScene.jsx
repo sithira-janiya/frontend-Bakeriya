@@ -2,6 +2,7 @@ import { Canvas } from '@react-three/fiber'
 import { Float, PresentationControls, ContactShadows } from '@react-three/drei'
 import { useTheme } from '../../context/ThemeContext.jsx'
 import { Donut, Cupcake, Macaron } from './BakeryShapes.jsx'
+import CanvasErrorBoundary from './CanvasErrorBoundary.jsx'
 
 /**
  * Interactive 3D hero centerpiece for the Home page. Drag to tip the treats
@@ -13,6 +14,7 @@ export default function HeroScene() {
   const dark = theme === 'dark'
 
   return (
+    <CanvasErrorBoundary>
     <Canvas
       camera={{ position: [0, 0, 6], fov: 40 }}
       dpr={[1, 1.5]}
@@ -39,5 +41,6 @@ export default function HeroScene() {
 
       <ContactShadows position={[0, -2, 0]} opacity={dark ? 0.25 : 0.35} blur={2.6} scale={11} far={4} />
     </Canvas>
+    </CanvasErrorBoundary>
   )
 }
