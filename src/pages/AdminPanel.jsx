@@ -12,7 +12,7 @@ const ACTION_KEY = { pending: 'chef.startCooking', cooking: 'chef.markReady', re
 const COLUMN_ICON = { pending: Clock3, cooking: ChefHat, ready: PackageCheck, completed: Home }
 
 export default function AdminPanel() {
-  const { orders, updateOrderStatus, logoutAdmin } = useStore()
+  const { orders, updateOrderStatus, logoutAdmin, kitchenActive, setKitchenActive } = useStore()
   const { t, language } = useLanguage()
   const navigate = useNavigate()
   const [tab, setTab] = useState('orders')
@@ -56,9 +56,23 @@ export default function AdminPanel() {
           </h1>
           <p className="text-crust-500 text-sm">{t('chef.liveQueueDesc')}</p>
         </div>
-        <button onClick={handleLogout} className="flex items-center gap-2 px-4 py-2 rounded-full border border-crust-300 text-crust-700 text-sm font-semibold hover:bg-crust-100 shrink-0 whitespace-nowrap">
-          <LogOut size={16} /> {t('chef.logout')}
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => setKitchenActive(!kitchenActive)}
+            title="Toggle whether the kitchen accepts new orders"
+            className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-colors ${
+              kitchenActive
+                ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                : 'bg-red-100 text-red-700 hover:bg-red-200'
+            }`}
+          >
+            <span className={`h-2 w-2 rounded-full ${kitchenActive ? 'bg-green-500' : 'bg-red-500'}`} />
+            {kitchenActive ? 'Kitchen active' : 'Kitchen inactive'}
+          </button>
+          <button onClick={handleLogout} className="flex items-center gap-2 px-4 py-2 rounded-full border border-crust-300 text-crust-700 text-sm font-semibold hover:bg-crust-100 whitespace-nowrap">
+            <LogOut size={16} /> {t('chef.logout')}
+          </button>
+        </div>
       </div>
 
       {/* Orders | Menu tabs */}

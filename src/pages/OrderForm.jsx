@@ -10,7 +10,7 @@ import OrderSuccess from '../components/OrderSuccess.jsx'
 const initialForm = { name: '', address: '', email: '', phone: '' }
 
 export default function OrderForm() {
-  const { cart, updateCartQty, removeFromCart, cartTotal, placeOrder } = useStore()
+  const { cart, updateCartQty, removeFromCart, cartTotal, placeOrder, kitchenActive } = useStore()
   const { t, language } = useLanguage()
   const [form, setForm] = useState(initialForm)
   const [errors, setErrors] = useState({})
@@ -151,8 +151,17 @@ export default function OrderForm() {
           {submitError && (
             <p className="text-sm text-red-500 -mt-1" role="alert">{submitError}</p>
           )}
-          <button type="submit" className="mt-2 px-6 py-3 rounded-full bg-oven-500 text-white font-semibold hover:bg-oven-600 transition-colors">
-            {t('order.placeOrder')}
+          {!kitchenActive && (
+            <p className="text-sm text-red-600 -mt-1">The kitchen is temporarily closed for new orders. Please check back soon.</p>
+          )}
+          <button
+            type="submit"
+            disabled={!kitchenActive}
+            className={`mt-2 px-6 py-3 rounded-full text-white font-semibold transition-colors ${
+              kitchenActive ? 'bg-oven-500 hover:bg-oven-600' : 'bg-crust-300 cursor-not-allowed'
+            }`}
+          >
+            {kitchenActive ? t('order.placeOrder') : 'Kitchen closed'}
           </button>
         </form>
       </div>

@@ -16,6 +16,7 @@ import { menuItems as fallbackMenu } from '../data/menuData.js'
 const StoreContext = createContext(null)
 
 const CART_KEY = 'bakerya_cart'
+const KITCHEN_ACTIVE_KEY = 'bakerya_kitchen_active'
 
 export const ORDER_STEPS = ['pending', 'cooking', 'ready', 'completed']
 export const STEP_LABELS = {
@@ -44,6 +45,7 @@ function writeJSON(key, value) {
 
 export function StoreProvider({ children }) {
   const [cart, setCart] = useState(() => readJSON(CART_KEY, []))
+  const [kitchenActive, setKitchenActiveState] = useState(() => readJSON(KITCHEN_ACTIVE_KEY, true))
   const [menu, setMenu] = useState([])
   const [menuLoading, setMenuLoading] = useState(true)
   const [orders, setOrders] = useState([])
@@ -203,6 +205,10 @@ export function StoreProvider({ children }) {
     writeJSON(CART_KEY, cart)
   }, [cart])
 
+  useEffect(() => {
+    writeJSON(KITCHEN_ACTIVE_KEY, kitchenActive)
+  }, [kitchenActive])
+
   // ---- Cart (client-side) ----
   const addToCart = useCallback((item, qty = 1) => {
     const name = typeof item.name === 'object' ? item.name : { en: item.name }
@@ -228,6 +234,8 @@ export function StoreProvider({ children }) {
 
   const clearCart = useCallback(() => setCart([]), [])
 
+  const setKitchenActive = useCallback((active) => setKitchenActiveState(Boolean(active)), [])
+
   const cartCount = useMemo(() => cart.reduce((sum, c) => sum + c.qty, 0), [cart])
   const cartTotal = useMemo(() => cart.reduce((sum, c) => sum + c.qty * c.price, 0), [cart])
 
@@ -235,6 +243,7 @@ export function StoreProvider({ children }) {
   // Returns the new order id on success; throws ApiError on failure.
   const placeOrder = useCallback(
     async (customer) => {
+      if (!kitchenActive) throw new Error('The kitchen is closed for new orders right now. Please try again later.')
       if (cart.length === 0) return null
       const payload = {
         customer,
@@ -244,7 +253,7 @@ export function StoreProvider({ children }) {
       clearCart()
       return order.id
     },
-    [cart, clearCart]
+    [cart, clearCart, kitchenActive]
   )
 
   const updateOrderStatus = useCallback(async (orderId, status) => {
@@ -336,7 +345,9 @@ export function StoreProvider({ children }) {
     requestPasswordPin,
     changePassword,
     loginAdmin,
-    logoutAdmin
+    logoutAdmin,
+    kitchenActive,
+    setKitchenActive
   }
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
