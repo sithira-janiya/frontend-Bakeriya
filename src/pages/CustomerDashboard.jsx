@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { LogOut, User, Mail, Package, KeyRound, RefreshCw } from 'lucide-react'
 import { useStore, STEP_LABELS } from '../context/StoreContext.jsx'
+import { formatLKR } from '../utils/currency.js'
 
 export default function CustomerDashboard() {
   const { currentUser, logout, findOrdersByEmail, requestPasswordPin, changePassword } = useStore()
@@ -186,7 +187,7 @@ export default function CustomerDashboard() {
                   <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-oven-50 text-oven-700">
                     {STEP_LABELS[o.status] || o.status}
                   </span>
-                  <span className="font-semibold text-sm">${Number(o.total).toFixed(2)}</span>
+                  <span className="font-semibold text-sm">{formatLKR(o.total)}</span>
                 </div>
               </Link>
             ))}

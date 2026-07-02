@@ -4,6 +4,7 @@ import { Minus, Plus, Trash2, ShoppingBag } from 'lucide-react'
 import { useStore } from '../context/StoreContext.jsx'
 import { useLanguage } from '../context/LanguageContext.jsx'
 import LoadingScreen from '../components/LoadingScreen.jsx'
+import { formatLKR } from '../utils/currency.js'
 import OrderSuccess from '../components/OrderSuccess.jsx'
 
 const initialForm = { name: '', address: '', email: '', phone: '' }
@@ -85,7 +86,7 @@ export default function OrderForm() {
                 <div className="text-2xl shrink-0">{item.emoji}</div>
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold text-sm break-words">{itemName}</div>
-                  <div className="text-xs text-crust-500">${item.price.toFixed(2)} each</div>
+                  <div className="text-xs text-crust-500">{formatLKR(item.price)} each</div>
                 </div>
                 <div className="flex items-center gap-1 border border-crust-200 rounded-full px-1.5 py-1 shrink-0">
                   <button onClick={() => updateCartQty(item.id, item.qty - 1)} className="p-1 text-crust-600 hover:text-oven-600" aria-label={t('item.decreaseQty')}>
@@ -105,7 +106,7 @@ export default function OrderForm() {
         </div>
         <div className="flex items-center justify-between mt-4 px-1">
           <span className="font-semibold text-crust-700">{t('order.total')}</span>
-          <span className="font-display font-bold text-xl text-oven-600">${cartTotal.toFixed(2)}</span>
+          <span className="font-display font-bold text-xl text-oven-600">{formatLKR(cartTotal)}</span>
         </div>
       </div>
 

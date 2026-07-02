@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Plus, Minus, ShoppingCart } from 'lucide-react'
 import { useStore } from '../context/StoreContext.jsx'
 import { useLanguage } from '../context/LanguageContext.jsx'
+import { formatLKR } from '../utils/currency.js'
 
 export default function ItemCard({ item }) {
   const { addToCart } = useStore()
@@ -27,7 +28,7 @@ export default function ItemCard({ item }) {
       <div className="flex items-start justify-between gap-2">
         <div className="text-4xl">{item.emoji}</div>
         <div className="text-right">
-          <div className="font-display font-bold text-oven-600">${item.price.toFixed(2)}</div>
+          <div className="font-display font-bold text-oven-600">{formatLKR(item.price)}</div>
           {!item.available && <div className="text-xs font-semibold text-crust-500">{t('item.soldOut')}</div>}
         </div>
       </div>

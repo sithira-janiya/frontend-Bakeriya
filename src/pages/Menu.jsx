@@ -5,6 +5,7 @@ import ItemCard from '../components/ItemCard.jsx'
 import FilterBar from '../components/FilterBar.jsx'
 import { useStore } from '../context/StoreContext.jsx'
 import { useLanguage } from '../context/LanguageContext.jsx'
+import { formatLKR } from '../utils/currency.js'
 
 export default function Menu() {
   const [filters, setFilters] = useState({ category: 'All', tags: [], search: '', sort: 'default' })
@@ -68,7 +69,7 @@ export default function Menu() {
             <div className="flex items-center gap-2 text-sm font-semibold min-w-0">
               <ShoppingBag size={18} className="shrink-0" />
               <span className="truncate">
-                {cartCount} {cartCount > 1 ? t('menu.itemPlural') : t('menu.itemSingular')} · ${cartTotal.toFixed(2)}
+                {cartCount} {cartCount > 1 ? t('menu.itemPlural') : t('menu.itemSingular')} · {formatLKR(cartTotal)}
               </span>
             </div>
             <button

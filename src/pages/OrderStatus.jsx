@@ -5,6 +5,7 @@ import { useStore } from '../context/StoreContext.jsx'
 import { useLanguage } from '../context/LanguageContext.jsx'
 import OrderStepper from '../components/OrderStepper.jsx'
 import CookingScene from '../components/CookingScene.jsx'
+import { formatLKR } from '../utils/currency.js'
 
 export default function OrderStatus() {
   const { orderId } = useParams()
@@ -175,14 +176,14 @@ export default function OrderStatus() {
               return (
                 <div key={item.id} className="flex justify-between gap-2">
                   <span className="break-words">{item.qty} × {itemName}</span>
-                  <span className="text-crust-600 shrink-0">${(item.qty * item.price).toFixed(2)}</span>
+                  <span className="text-crust-600 shrink-0">{formatLKR(item.qty * item.price)}</span>
                 </div>
               )
             })}
           </div>
           <div className="flex justify-between mt-3 pt-3 border-t border-crust-200 font-semibold">
             <span>{t('order.total')}</span>
-            <span>${order.total.toFixed(2)}</span>
+            <span>{formatLKR(order.total)}</span>
           </div>
         </div>
 

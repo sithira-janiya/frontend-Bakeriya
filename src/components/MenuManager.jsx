@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Plus, Trash2, Eye, EyeOff, RefreshCw } from 'lucide-react'
 import { api } from '../api/client.js'
+import { formatLKR } from '../utils/currency.js'
 
 // Chef-facing menu management (add / remove items, toggle availability).
 // Labels are plain English by design — this is an admin-only surface.
@@ -219,7 +220,7 @@ export default function MenuManager() {
               <div className="min-w-0 flex-1">
                 <div className="font-semibold text-sm text-crust-900 truncate">{item.name?.en || item.id}</div>
                 <div className="text-xs text-crust-500 truncate">
-                  {item.category} · ${Number(item.price).toFixed(2)}
+                  {item.category} · {formatLKR(item.price)}
                 </div>
               </div>
               <button

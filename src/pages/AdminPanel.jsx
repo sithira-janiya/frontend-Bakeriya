@@ -5,6 +5,7 @@ import { useStore, ORDER_STEPS } from '../context/StoreContext.jsx'
 import { useLanguage } from '../context/LanguageContext.jsx'
 import MenuManager from '../components/MenuManager.jsx'
 import KitchenDisplaySettings, { loadDisplay, saveDisplay } from '../components/KitchenDisplaySettings.jsx'
+import { formatLKR } from '../utils/currency.js'
 
 const NEXT_STATUS = { pending: 'cooking', cooking: 'ready', ready: 'completed' }
 const ACTION_KEY = { pending: 'chef.startCooking', cooking: 'chef.markReady', ready: 'chef.markCollected' }
@@ -139,7 +140,7 @@ export default function AdminPanel() {
                     {display.total && (
                       <div className="flex items-center justify-between text-sm font-semibold pt-1">
                         <span>{t('chef.total')}</span>
-                        <span>${order.total.toFixed(2)}</span>
+                        <span>{formatLKR(order.total)}</span>
                       </div>
                     )}
                     {NEXT_STATUS[status] && (
