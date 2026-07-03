@@ -17,8 +17,7 @@ export default function Footer() {
         </div>
         <div>
           <h4 className="font-semibold text-white mb-2">{t('footer.visitUs')}</h4>
-          <p className="text-crust-300">12 Baker Street, Your City</p>
-          <p className="text-crust-300">hello@bakerya.example</p>
+          <p className="text-crust-300">67, Mihindu Mawatha, Veyangoda</p>
         </div>
       </div>
       <div className="text-center text-xs text-crust-400 pb-6">

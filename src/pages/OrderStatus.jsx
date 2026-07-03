@@ -10,11 +10,12 @@ import { formatLKR } from '../utils/currency.js'
 export default function OrderStatus() {
   const { orderId } = useParams()
   const navigate = useNavigate()
-  const { fetchOrder, findOrdersByEmail, orderUpdates } = useStore()
+  const { fetchOrder, findOrdersByEmail, orderUpdates, currentUser } = useStore()
   const { t, language } = useLanguage()
 
   const [lookup, setLookup] = useState('')
   const [notFound, setNotFound] = useState(false)
+  const [needsSignIn, setNeedsSignIn] = useState(false)
   const [searching, setSearching] = useState(false)
 
   const [order, setOrder] = useState(null)
@@ -55,8 +56,15 @@ export default function OrderStatus() {
     if (!value) return
     setSearching(true)
     setNotFound(false)
+    setNeedsSignIn(false)
     try {
       if (value.includes('@')) {
+        // Email lookup is authenticated (own orders only). Guests must use the
+        // order code they were given.
+        if (!currentUser) {
+          setNeedsSignIn(true)
+          return
+        }
         const matches = await findOrdersByEmail(value)
         if (matches.length > 0) {
           navigate(`/track/${matches[0].id}`)
@@ -89,6 +97,7 @@ export default function OrderStatus() {
             onChange={(e) => {
               setLookup(e.target.value)
               setNotFound(false)
+              setNeedsSignIn(false)
             }}
             placeholder={t('track.placeholder')}
             className="flex-1 border border-crust-200 rounded-full px-4 py-2.5 outline-none focus:border-oven-500 min-w-0"
@@ -98,6 +107,13 @@ export default function OrderStatus() {
           </button>
         </form>
         {notFound && <p className="text-sm text-red-500 mt-3 text-center">{t('track.notFoundSearch')}</p>}
+        {needsSignIn && (
+          <p className="text-sm text-crust-600 mt-3 text-center">
+            <Link to="/login" className="font-semibold text-oven-600 hover:underline">
+              {t('track.signInForEmail')}
+            </Link>
+          </p>
+        )}
       </div>
     )
   }
@@ -190,10 +206,21 @@ export default function OrderStatus() {
         <div className="bg-white border border-crust-200 rounded-2xl p-5">
           <h2 className="font-semibold mb-3">{t('track.pickupDetails')}</h2>
           <div className="text-sm flex flex-col gap-1 text-crust-700">
-            <div><span className="font-semibold">{t('track.name')}</span> {order.customer.name}</div>
-            <div><span className="font-semibold">{t('track.address')}</span> {order.customer.address}</div>
-            <div><span className="font-semibold">{t('track.email')}</span> {order.customer.email}</div>
-            <div><span className="font-semibold">{t('track.phone')}</span> {order.customer.phone}</div>
+            {order.customer?.name && (
+              <div><span className="font-semibold">{t('track.name')}</span> {order.customer.name}</div>
+            )}
+            {order.customer?.address && (
+              <div><span className="font-semibold">{t('track.address')}</span> {order.customer.address}</div>
+            )}
+            {order.customer?.email && (
+              <div><span className="font-semibold">{t('track.email')}</span> {order.customer.email}</div>
+            )}
+            {order.customer?.phone && (
+              <div><span className="font-semibold">{t('track.phone')}</span> {order.customer.phone}</div>
+            )}
+            {!order.customer?.email && (
+              <div className="text-xs text-crust-500">{t('track.signInForEmail')}</div>
+            )}
             <div className="text-xs text-crust-400 mt-2">{t('track.placed')} {new Date(order.createdAt).toLocaleString()}</div>
           </div>
         </div>

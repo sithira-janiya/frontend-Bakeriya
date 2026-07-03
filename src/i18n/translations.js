@@ -121,8 +121,9 @@ export const translations = {
 
     // Track order page
     'track.title': 'Track Your Order',
-    'track.subtitle': 'Enter your Order ID or the email you used when ordering.',
-    'track.placeholder': 'ORD-XXXXX or you@email.com',
+    'track.subtitle': 'Enter your Order ID. Sign in to look up all your orders by email.',
+    'track.placeholder': 'ORD-XXXXXXXX',
+    'track.signInForEmail': 'Searching by email requires an account. Please sign in, or enter your Order ID.',
     'track.find': 'Find',
     'track.searching': 'Searching…',
     'track.loading': 'Loading your order…',
@@ -297,8 +298,9 @@ export const translations = {
 
     // Track order page
     'track.title': 'ඔබගේ ඇණවුම පරීක්ෂා කරන්න',
-    'track.subtitle': 'ඔබගේ ඇණවුම් අංකය හෝ ඇණවුම් කිරීමේදී භාවිතා කළ ඊමේල් ලිපිනය ඇතුළත් කරන්න.',
-    'track.placeholder': 'ORD-XXXXX හෝ you@email.com',
+    'track.subtitle': 'ඔබගේ ඇණවුම් අංකය ඇතුළත් කරන්න. ඊමේල් මගින් සියලු ඇණවුම් සෙවීමට පිවිසෙන්න.',
+    'track.placeholder': 'ORD-XXXXXXXX',
+    'track.signInForEmail': 'ඊමේල් මගින් සෙවීමට ගිණුමක් අවශ්‍යයි. කරුණාකර පිවිසෙන්න, නැතහොත් ඔබගේ ඇණවුම් අංකය ඇතුළත් කරන්න.',
     'track.find': 'සොයන්න',
     'track.searching': 'සොයමින්…',
     'track.loading': 'ඔබගේ ඇණවුම පූරණය වෙමින්…',

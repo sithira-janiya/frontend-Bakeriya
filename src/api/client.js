@@ -86,8 +86,11 @@ export class ApiError extends Error {
 export const api = {
   getMenu: () => request('/menu'),
   placeOrder: (payload) => request('/orders', { method: 'POST', body: payload }),
-  getOrder: (code) => request(`/orders/${encodeURIComponent(code)}`),
-  findOrdersByEmail: (email) => request(`/orders?email=${encodeURIComponent(email)}`),
+  // auth: attaches the token when signed in so the owner/admin gets full detail;
+  // guests still work (backend returns a redacted view for the code lookup).
+  getOrder: (code) => request(`/orders/${encodeURIComponent(code)}`, { auth: true }),
+  // Email lookup now requires auth (own orders only, or admin) server-side.
+  findOrdersByEmail: (email) => request(`/orders?email=${encodeURIComponent(email)}`, { auth: true }),
   listOrders: () => request('/orders', { auth: true }),
   updateOrderStatus: (code, status) =>
     request(`/orders/${encodeURIComponent(code)}/status`, { method: 'PATCH', body: { status }, auth: true }),

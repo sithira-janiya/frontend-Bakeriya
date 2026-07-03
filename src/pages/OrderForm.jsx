@@ -1,18 +1,24 @@
 import { useState } from 'react'
+import { motion } from 'framer-motion'
 import { useNavigate, Link } from 'react-router-dom'
-import { Minus, Plus, Trash2, ShoppingBag } from 'lucide-react'
+import { Minus, Plus, Trash2, ShoppingBag, MapPin } from 'lucide-react'
 import { useStore } from '../context/StoreContext.jsx'
 import { useLanguage } from '../context/LanguageContext.jsx'
 import LoadingScreen from '../components/LoadingScreen.jsx'
 import { formatLKR } from '../utils/currency.js'
 import OrderSuccess from '../components/OrderSuccess.jsx'
 
-const initialForm = { name: '', address: '', email: '', phone: '' }
-
 export default function OrderForm() {
-  const { cart, updateCartQty, removeFromCart, cartTotal, placeOrder, kitchenActive } = useStore()
+  const { cart, updateCartQty, removeFromCart, cartTotal, placeOrder, kitchenActive, currentUser } = useStore()
   const { t, language } = useLanguage()
-  const [form, setForm] = useState(initialForm)
+  // Logged-in customers get name & email pre-filled from their account (still
+  // editable); guests fill everything themselves. Phone is always manual since
+  // accounts don't store it. Pickup only — no delivery address collected.
+  const [form, setForm] = useState({
+    name: currentUser?.name ?? '',
+    email: currentUser?.email ?? '',
+    phone: ''
+  })
   const [errors, setErrors] = useState({})
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
@@ -22,7 +28,6 @@ export default function OrderForm() {
   function validate() {
     const errs = {}
     if (!form.name.trim()) errs.name = t('errors.nameRequired')
-    if (!form.address.trim()) errs.address = t('errors.addressRequired')
     if (!form.email.trim()) errs.email = t('errors.emailRequired')
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = t('errors.emailInvalid')
     if (!form.phone.trim()) errs.phone = t('errors.phoneRequired')
@@ -112,6 +117,7 @@ export default function OrderForm() {
 
       <div>
         <h1 className="text-2xl font-bold mb-4">{t('order.yourDetails')}</h1>
+        <PickupCard />
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <Field label={t('order.fullName')} error={errors.name}>
             <input
@@ -119,15 +125,6 @@ export default function OrderForm() {
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
               className="w-full border border-crust-200 rounded-lg px-3 py-2 outline-none focus:border-oven-500"
               placeholder="Jane Doe"
-            />
-          </Field>
-          <Field label={t('order.addressLabel')} error={errors.address}>
-            <textarea
-              value={form.address}
-              onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
-              className="w-full border border-crust-200 rounded-lg px-3 py-2 outline-none focus:border-oven-500"
-              rows={3}
-              placeholder="123 Baker Street, Your City"
             />
           </Field>
           <Field label={t('order.email')} error={errors.email}>
@@ -166,6 +163,39 @@ export default function OrderForm() {
         </form>
       </div>
     </div>
+  )
+}
+
+function PickupCard() {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, ease: 'easeOut' }}
+      whileHover={{ y: -4 }}
+      className="group relative overflow-hidden rounded-2xl border border-oven-500/25 bg-gradient-to-br from-oven-500/5 to-transparent p-4 mb-5 shadow-sm hover:shadow-md transition-shadow"
+    >
+      {/* soft aura glow */}
+      <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-oven-500/20 blur-2xl transition-opacity duration-500 group-hover:opacity-80" />
+      <div className="relative flex items-center gap-4">
+        <div className="relative shrink-0">
+          <span className="absolute inset-0 rounded-full bg-oven-500/40 animate-ping" />
+          <span className="relative flex h-12 w-12 items-center justify-center rounded-full bg-oven-500 text-white shadow-md">
+            <MapPin size={22} />
+          </span>
+        </div>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <h2 className="font-semibold text-crust-800">Pickup Location</h2>
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-oven-600 bg-oven-500/10 rounded-full px-2 py-0.5">
+              Pickup only
+            </span>
+          </div>
+          <p className="text-sm text-crust-600">Collect your order from our kitchen</p>
+          <p className="text-sm font-medium text-crust-800 mt-0.5">67, Mihindu Mawatha, Veyangoda</p>
+        </div>
+      </div>
+    </motion.div>
   )
 }
 
