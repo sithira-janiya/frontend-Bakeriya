@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { LogOut, ChefHat, Clock3, PackageCheck, Home, Phone, Mail, MapPin } from 'lucide-react'
+import { LogOut, ChefHat, Clock3, PackageCheck, Home, Phone, Mail, MapPin, Trash2 } from 'lucide-react'
 import { useStore, ORDER_STEPS } from '../context/StoreContext.jsx'
 import { useLanguage } from '../context/LanguageContext.jsx'
 import MenuManager from '../components/MenuManager.jsx'
@@ -12,7 +12,7 @@ const ACTION_KEY = { pending: 'chef.startCooking', cooking: 'chef.markReady', re
 const COLUMN_ICON = { pending: Clock3, cooking: ChefHat, ready: PackageCheck, completed: Home }
 
 export default function AdminPanel() {
-  const { orders, updateOrderStatus, logoutAdmin, kitchenActive, setKitchenActive } = useStore()
+  const { orders, updateOrderStatus, deleteOrder, logoutAdmin, kitchenActive, setKitchenActive } = useStore()
   const { t, language } = useLanguage()
   const navigate = useNavigate()
   const [tab, setTab] = useState('orders')
@@ -44,6 +44,24 @@ export default function AdminPanel() {
       await updateOrderStatus(orderId, nextStatus)
     } catch {
       // WS will still reconcile on the next broadcast; ignore transient errors
+    }
+  }
+
+  // End-of-day cleanup: permanently remove collected (completed) orders.
+  async function removeOrder(orderId) {
+    try {
+      await deleteOrder(orderId)
+    } catch {
+      // ignore transient errors; the order:deleted broadcast reconciles state
+    }
+  }
+
+  async function clearCollected() {
+    const done = grouped.completed
+    if (done.length === 0) return
+    if (!window.confirm(`Remove all ${done.length} collected order(s)? This permanently deletes them.`)) return
+    for (const o of done) {
+      await removeOrder(o.id)
     }
   }
 
@@ -112,6 +130,15 @@ export default function AdminPanel() {
                 <span className="ml-auto text-xs font-bold bg-white px-2 py-0.5 rounded-full text-crust-500 shrink-0">
                   {grouped[status].length}
                 </span>
+                {status === 'completed' && grouped.completed.length > 0 && (
+                  <button
+                    onClick={clearCollected}
+                    title="Permanently remove all collected orders"
+                    className="flex items-center gap-1 text-xs font-semibold text-red-600 hover:text-red-700 shrink-0"
+                  >
+                    <Trash2 size={13} /> Clear all
+                  </button>
+                )}
               </div>
 
               <div className="flex flex-col gap-3 overflow-y-auto scroll-thin pr-1">
@@ -163,6 +190,14 @@ export default function AdminPanel() {
                         className="mt-1 px-3 py-2 rounded-full bg-oven-500 text-white text-xs font-semibold hover:bg-oven-600 transition-colors break-words"
                       >
                         {t(ACTION_KEY[status])}
+                      </button>
+                    )}
+                    {status === 'completed' && (
+                      <button
+                        onClick={() => removeOrder(order.id)}
+                        className="mt-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-full border border-red-200 text-red-600 text-xs font-semibold hover:bg-red-50 transition-colors"
+                      >
+                        <Trash2 size={13} /> Remove
                       </button>
                     )}
                   </div>
