@@ -1,22 +1,41 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
-import { UserPlus, Lock, Mail, User } from 'lucide-react'
+import { useNavigate, useLocation, Link } from 'react-router-dom'
+import { UserPlus, Lock, Mail, User, MailCheck } from 'lucide-react'
 import { GoogleLogin } from '@react-oauth/google'
 import { useStore } from '../context/StoreContext.jsx'
 
 const googleEnabled = !!import.meta.env.VITE_GOOGLE_CLIENT_ID
 
 export default function Register() {
-  const { register, googleLogin, currentUser, isAdmin } = useStore()
+  const { register, verifyEmail, resendVerification, googleLogin, currentUser, isAdmin } = useStore()
   const navigate = useNavigate()
+  const location = useLocation()
   const [form, setForm] = useState({ name: '', email: '', password: '' })
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+
+  // Two-step: 'form' collects details, 'verify' confirms the emailed code.
+  const [step, setStep] = useState('form')
+  const [pendingEmail, setPendingEmail] = useState('')
+  const [code, setCode] = useState('')
+  const [notice, setNotice] = useState('')
 
   useEffect(() => {
     if (isAdmin) navigate('/admin', { replace: true })
     else if (currentUser) navigate('/dashboard', { replace: true })
   }, [isAdmin, currentUser, navigate])
+
+  // Arriving from the Login page with an unverified account: jump straight to
+  // the code step and send a fresh code.
+  useEffect(() => {
+    const email = location.state?.verifyEmail
+    if (!email) return
+    setPendingEmail(email)
+    setStep('verify')
+    setNotice(`We've emailed a verification code to ${email}.`)
+    resendVerification(email).catch(() => {})
+    navigate(location.pathname, { replace: true, state: {} }) // clear state
+  }, [location.state, location.pathname, navigate, resendVerification])
 
   function set(key, value) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -30,10 +49,42 @@ export default function Register() {
     if (form.password.length < 6) return setError('Password must be at least 6 characters.')
     setBusy(true)
     try {
-      await register({ name: form.name.trim(), email: form.email.trim(), password: form.password })
-      navigate('/dashboard', { replace: true })
+      const email = form.email.trim()
+      await register({ name: form.name.trim(), email, password: form.password })
+      setPendingEmail(email)
+      setStep('verify')
+      setNotice(`We've emailed a 6-digit code to ${email}. Enter it to activate your account.`)
     } catch (err) {
       setError(err?.message || 'Could not create account')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleVerify(e) {
+    e.preventDefault()
+    setError('')
+    if (!/^\d{6}$/.test(code.trim())) return setError('Enter the 6-digit code from your email.')
+    setBusy(true)
+    try {
+      await verifyEmail(pendingEmail, code.trim())
+      navigate('/dashboard', { replace: true }) // now signed in
+    } catch (err) {
+      setError(err?.message || 'Could not verify your email')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleResend() {
+    setError('')
+    setNotice('')
+    setBusy(true)
+    try {
+      await resendVerification(pendingEmail)
+      setNotice(`A new code is on its way to ${pendingEmail}.`)
+    } catch {
+      setError('Could not resend the code. Please try again.')
     } finally {
       setBusy(false)
     }
@@ -54,6 +105,56 @@ export default function Register() {
 
   const field = 'flex items-center gap-2 border border-crust-200 rounded-full px-4 py-2.5'
   const inputCls = 'flex-1 outline-none bg-transparent min-w-0'
+
+  if (step === 'verify') {
+    return (
+      <div className="max-w-sm mx-auto px-4 py-16">
+        <div className="w-14 h-14 rounded-full bg-oven-500 text-white flex items-center justify-center mx-auto mb-4">
+          <MailCheck size={26} />
+        </div>
+        <h1 className="text-2xl font-bold text-center mb-1">Verify your email</h1>
+        <p className="text-crust-600 text-center mb-6 text-sm">
+          Enter the 6-digit code we sent to <span className="font-semibold break-words">{pendingEmail}</span>.
+        </p>
+
+        <form onSubmit={handleVerify} className="flex flex-col gap-3">
+          <div className={field}>
+            <Mail size={16} className="text-crust-400 shrink-0" />
+            <input
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="6-digit code"
+              inputMode="numeric"
+              maxLength={6}
+              autoComplete="one-time-code"
+              className={`${inputCls} tracking-[0.4em] font-mono`}
+              autoFocus
+            />
+          </div>
+
+          {notice && <p className="text-sm text-green-600 text-center">{notice}</p>}
+          {error && <p className="text-sm text-red-500 text-center" role="alert">{error}</p>}
+
+          <button type="submit" disabled={busy} className="px-5 py-2.5 rounded-full bg-oven-500 text-white font-semibold hover:bg-oven-600 disabled:opacity-60">
+            {busy ? 'Verifying…' : 'Verify & continue'}
+          </button>
+        </form>
+
+        <div className="flex items-center justify-between mt-4 text-sm">
+          <button type="button" onClick={handleResend} disabled={busy} className="font-semibold text-oven-600 hover:underline disabled:opacity-60">
+            Resend code
+          </button>
+          <button
+            type="button"
+            onClick={() => { setStep('form'); setCode(''); setError(''); setNotice('') }}
+            className="text-crust-500 hover:text-crust-800"
+          >
+            Use a different email
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-sm mx-auto px-4 py-16">

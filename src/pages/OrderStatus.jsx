@@ -10,7 +10,7 @@ import { formatLKR } from '../utils/currency.js'
 export default function OrderStatus() {
   const { orderId } = useParams()
   const navigate = useNavigate()
-  const { fetchOrder, findOrdersByEmail, orderUpdates, currentUser } = useStore()
+  const { fetchOrder, findOrdersByEmail, orderUpdates, currentUser, trackOrder } = useStore()
   const { t, language } = useLanguage()
 
   const [lookup, setLookup] = useState('')
@@ -31,6 +31,7 @@ export default function OrderStatus() {
     let cancelled = false
     setLoading(true)
     setLoadError(false)
+    trackOrder(orderId) // subscribe for live status pushes on this order
     fetchOrder(orderId)
       .then((found) => {
         if (!cancelled) setOrder(found)
@@ -44,7 +45,7 @@ export default function OrderStatus() {
     return () => {
       cancelled = true
     }
-  }, [orderId, fetchOrder])
+  }, [orderId, fetchOrder, trackOrder])
 
   // Live status: a WebSocket push for this order overrides the fetched status.
   const liveStatus = orderId ? orderUpdates[orderId]?.status : undefined

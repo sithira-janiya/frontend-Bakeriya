@@ -10,8 +10,20 @@ import ThemeToggle from './ThemeToggle.jsx'
 export default function Navbar() {
   const [open, setOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
-  const { cartCount, isAdmin, currentUser, logout } = useStore()
+  const { cartCount, isAdmin, currentUser, logout, activeOrders, orderUpdates } = useStore()
   const { t } = useLanguage()
+
+  // In-progress orders this browser placed, with any live status applied. The
+  // pill lets the customer jump straight to tracking while food is being made.
+  const liveActive = (activeOrders || [])
+    .map((o) => ({ id: o.id, status: orderUpdates[o.id]?.status || o.status }))
+    .filter((o) => o.status && o.status !== 'completed')
+  const primaryOrder = liveActive[0]
+  const statusStyle = {
+    pending: 'bg-amber-100 text-amber-700 border-amber-200',
+    cooking: 'bg-oven-100 text-oven-700 border-oven-200',
+    ready: 'bg-green-100 text-green-700 border-green-200'
+  }
 
   function handleLogout() {
     logout()
@@ -97,6 +109,22 @@ export default function Navbar() {
         </nav>
 
         <div className="hidden md:flex items-center gap-2">
+          {!isAdmin && primaryOrder && (
+            <motion.button
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              onClick={() => navigate(`/track/${primaryOrder.id}`)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold whitespace-nowrap ${statusStyle[primaryOrder.status] || 'bg-crust-100 text-crust-700 border-crust-200'}`}
+              title={t('nav.trackOrder')}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full bg-current ${primaryOrder.status === 'cooking' ? 'animate-pulse' : ''}`} />
+              <ChefHat size={14} className="shrink-0" />
+              {t(`status.${primaryOrder.status}`)}
+              {liveActive.length > 1 && (
+                <span className="ml-0.5 rounded-full bg-white/70 px-1.5">+{liveActive.length - 1}</span>
+              )}
+            </motion.button>
+          )}
           <LanguageSelector />
           <ThemeToggle />
           <motion.button
@@ -207,6 +235,19 @@ export default function Navbar() {
                   {l.label}
                 </NavLink>
               ))}
+              {!isAdmin && primaryOrder && (
+                <button
+                  onClick={() => {
+                    setOpen(false)
+                    navigate(`/track/${primaryOrder.id}`)
+                  }}
+                  className={`mt-1 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border text-sm font-semibold ${statusStyle[primaryOrder.status] || 'bg-crust-100 text-crust-700 border-crust-200'}`}
+                >
+                  <ChefHat size={16} />
+                  {t(`status.${primaryOrder.status}`)}
+                  {liveActive.length > 1 && ` (+${liveActive.length - 1})`}
+                </button>
+              )}
               <button
                 onClick={() => {
                   setOpen(false)

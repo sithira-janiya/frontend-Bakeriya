@@ -37,6 +37,11 @@ export default function Login() {
     try {
       go(await login(identifier.trim(), password))
     } catch (err) {
+      // Unverified account: send them to the code step instead of a dead error.
+      if (err?.data?.needsVerification) {
+        navigate('/register', { state: { verifyEmail: err.data.email || identifier.trim() } })
+        return
+      }
       setError(err?.message || 'Login failed')
     } finally {
       setBusy(false)

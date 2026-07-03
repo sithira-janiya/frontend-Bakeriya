@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { api, ApiError, getToken, setToken, wsUrl } from '../api/client.js'
+import { api, ApiError, getToken, setToken, setGuestToken, wsUrl } from '../api/client.js'
 import { menuItems as fallbackMenu } from '../data/menuData.js'
 
 /**
@@ -17,6 +17,9 @@ const StoreContext = createContext(null)
 
 const CART_KEY = 'bakerya_cart'
 const KITCHEN_ACTIVE_KEY = 'bakerya_kitchen_active'
+// Orders this browser placed that are still in progress. Powers the navbar
+// live-status pill. Each entry: { id, status }. Pruned once completed.
+const ACTIVE_ORDERS_KEY = 'bakerya_active_orders'
 
 export const ORDER_STEPS = ['pending', 'cooking', 'ready', 'completed']
 export const STEP_LABELS = {
@@ -50,6 +53,7 @@ export function StoreProvider({ children }) {
   const [menuLoading, setMenuLoading] = useState(true)
   const [orders, setOrders] = useState([])
   const [orderUpdates, setOrderUpdates] = useState({}) // code -> { status, at }
+  const [activeOrders, setActiveOrders] = useState(() => readJSON(ACTIVE_ORDERS_KEY, []))
   const [token, setTokenState] = useState(() => getToken())
   const [authUser, setAuthUser] = useState(null)
   const [authLoading, setAuthLoading] = useState(!!getToken())
@@ -60,6 +64,9 @@ export function StoreProvider({ children }) {
   const socketRef = useRef(null)
   const authRef = useRef({ token, isAdmin })
   authRef.current = { token, isAdmin }
+  // Order codes this browser follows over the WebSocket. Seeded from the
+  // persisted active orders; the server only streams status for codes we send.
+  const trackedCodesRef = useRef(new Set(activeOrders.map((o) => o.id)))
 
   // ---- Menu ----
   useEffect(() => {
@@ -101,6 +108,9 @@ export function StoreProvider({ children }) {
         if (tok && admin) {
           socket.send(JSON.stringify({ type: 'auth', token: tok }))
         }
+        // Re-subscribe to our tracked orders (survives reconnects).
+        const codes = [...trackedCodesRef.current]
+        if (codes.length) socket.send(JSON.stringify({ type: 'track', codes }))
       }
 
       socket.onmessage = (event) => {
@@ -110,12 +120,31 @@ export function StoreProvider({ children }) {
         } catch {
           return
         }
-        if (msg.type === 'order:created' || msg.type === 'order:updated') {
+        if (msg.type === 'order:deleted') {
+          // An admin cleared a collected order — drop it everywhere.
+          const code = msg.order?.id ?? msg.code
+          if (code) {
+            setOrders((prev) => prev.filter((o) => o.id !== code))
+            setActiveOrders((prev) => prev.filter((o) => o.id !== code))
+            setOrderUpdates((prev) => {
+              if (!(code in prev)) return prev
+              const next = { ...prev }
+              delete next[code]
+              return next
+            })
+          }
+        } else if (msg.type === 'order:created' || msg.type === 'order:updated') {
           // code+status arrives for everyone (lite); full order only for admins.
           const code = msg.order?.id ?? msg.code
           const status = msg.order?.status ?? msg.status
           if (code && status) {
             setOrderUpdates((prev) => ({ ...prev, [code]: { status, at: Date.now() } }))
+            // Keep the navbar's active-order list in sync; drop it once collected.
+            setActiveOrders((prev) => {
+              if (!prev.some((o) => o.id === code)) return prev
+              if (status === 'completed') return prev.filter((o) => o.id !== code)
+              return prev.map((o) => (o.id === code ? { ...o, status } : o))
+            })
           }
           if (msg.order) {
             setOrders((prev) => mergeOrder(prev, msg.order))
@@ -209,6 +238,45 @@ export function StoreProvider({ children }) {
     writeJSON(KITCHEN_ACTIVE_KEY, kitchenActive)
   }, [kitchenActive])
 
+  useEffect(() => {
+    writeJSON(ACTIVE_ORDERS_KEY, activeOrders)
+  }, [activeOrders])
+
+  // On load, refresh each tracked order's status once (WebSocket only pushes
+  // future changes) and prune any that are gone or already collected.
+  useEffect(() => {
+    const ids = trackedCodesRef.current.size ? [...trackedCodesRef.current] : []
+    if (ids.length === 0) return
+    let cancelled = false
+    Promise.all(
+      ids.map((id) =>
+        api
+          .getOrder(id)
+          .then((d) => ({ id, status: d.order?.status }))
+          .catch((err) => ({ id, gone: err instanceof ApiError && err.status === 404 }))
+      )
+    ).then((results) => {
+      if (cancelled) return
+      setActiveOrders((prev) => {
+        let next = prev
+        for (const r of results) {
+          if (r.gone || r.status === 'completed') {
+            next = next.filter((o) => o.id !== r.id)
+            trackedCodesRef.current.delete(r.id)
+          } else if (r.status) {
+            next = next.map((o) => (o.id === r.id ? { ...o, status: r.status } : o))
+          }
+        }
+        return next
+      })
+    })
+    return () => {
+      cancelled = true
+    }
+    // Run once on mount — trackedCodesRef is seeded from persisted active orders.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // ---- Cart (client-side) ----
   const addToCart = useCallback((item, qty = 1) => {
     const name = typeof item.name === 'object' ? item.name : { en: item.name }
@@ -240,6 +308,38 @@ export function StoreProvider({ children }) {
   const cartTotal = useMemo(() => cart.reduce((sum, c) => sum + c.qty * c.price, 0), [cart])
 
   // ---- Orders (backend) ----
+  // Subscribe this browser to live status for an order code (idempotent).
+  const sendTrack = useCallback((codes) => {
+    const socket = socketRef.current
+    if (socket && socket.readyState === WebSocket.OPEN && codes.length) {
+      socket.send(JSON.stringify({ type: 'track', codes }))
+    }
+  }, [])
+
+  const trackOrder = useCallback(
+    (code) => {
+      if (!code) return
+      trackedCodesRef.current.add(code)
+      sendTrack([code])
+    },
+    [sendTrack]
+  )
+
+  // Add/update an order in the navbar's in-progress list (dropped once collected).
+  const upsertActiveOrder = useCallback(
+    (order) => {
+      if (!order?.id) return
+      trackedCodesRef.current.add(order.id)
+      sendTrack([order.id])
+      setActiveOrders((prev) => {
+        const rest = prev.filter((o) => o.id !== order.id)
+        if (order.status === 'completed') return rest
+        return [{ id: order.id, status: order.status }, ...rest]
+      })
+    },
+    [sendTrack]
+  )
+
   // Returns the new order id on success; throws ApiError on failure.
   const placeOrder = useCallback(
     async (customer) => {
@@ -249,17 +349,29 @@ export function StoreProvider({ children }) {
         customer,
         items: cart.map((c) => ({ id: c.id, name: c.name, price: c.price, qty: c.qty }))
       }
-      const { order } = await api.placeOrder(payload)
+      const { order, guestToken } = await api.placeOrder(payload)
+      // Guests get a per-browser token so only they can reopen this order.
+      if (guestToken) setGuestToken(guestToken)
+      upsertActiveOrder(order)
       clearCart()
       return order.id
     },
-    [cart, clearCart, kitchenActive]
+    [cart, clearCart, kitchenActive, upsertActiveOrder]
   )
 
   const updateOrderStatus = useCallback(async (orderId, status) => {
     const { order } = await api.updateOrderStatus(orderId, status)
     setOrders((prev) => mergeOrder(prev, order))
     return order
+  }, [])
+
+  // Admin end-of-day cleanup: permanently remove a collected order. The backend
+  // frees the record and broadcasts order:deleted, but we also drop it locally
+  // so the initiating admin sees it vanish immediately.
+  const deleteOrder = useCallback(async (orderId) => {
+    await api.deleteOrder(orderId)
+    setOrders((prev) => prev.filter((o) => o.id !== orderId))
+    return true
   }, [])
 
   // Async lookups for the Track page.
@@ -291,7 +403,14 @@ export function StoreProvider({ children }) {
     async (identifier, password) => applyAuth(await api.login(identifier, password)),
     [applyAuth]
   )
-  const register = useCallback(async (payload) => applyAuth(await api.register(payload)), [applyAuth])
+  // Registration no longer signs you in — it returns { pendingVerification, email }.
+  // The account is inert until the emailed code is confirmed via verifyEmail.
+  const register = useCallback((payload) => api.register(payload), [])
+  const verifyEmail = useCallback(
+    async (email, code) => applyAuth(await api.verifyEmail(email, code)),
+    [applyAuth]
+  )
+  const resendVerification = useCallback((email) => api.resendVerification(email), [])
   const googleLogin = useCallback(
     async (credential) => applyAuth(await api.googleLogin(credential)),
     [applyAuth]
@@ -331,15 +450,20 @@ export function StoreProvider({ children }) {
     menuLoading,
     orders,
     orderUpdates,
+    activeOrders,
     placeOrder,
     updateOrderStatus,
+    deleteOrder,
     fetchOrder,
+    trackOrder,
     findOrdersByEmail,
     isAdmin,
     currentUser,
     authLoading,
     login,
     register,
+    verifyEmail,
+    resendVerification,
     googleLogin,
     logout,
     requestPasswordPin,
