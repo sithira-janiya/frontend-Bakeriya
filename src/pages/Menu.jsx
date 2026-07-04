@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { ShoppingBag, ArrowRight } from 'lucide-react'
 import ItemCard from '../components/ItemCard.jsx'
 import FilterBar from '../components/FilterBar.jsx'
+import Reveal from '../components/anim/Reveal.jsx'
 import { useStore } from '../context/StoreContext.jsx'
 import { useLanguage } from '../context/LanguageContext.jsx'
 import { formatLKR } from '../utils/currency.js'
@@ -57,8 +58,10 @@ export default function Menu() {
         <div className="text-center py-16 text-crust-500">{t('menu.noItems')}</div>
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((item) => (
-            <ItemCard key={item.id} item={item} />
+          {filtered.map((item, i) => (
+            <Reveal key={item.id} index={i % 6}>
+              <ItemCard item={item} />
+            </Reveal>
           ))}
         </div>
       )}
