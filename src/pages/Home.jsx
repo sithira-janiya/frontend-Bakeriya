@@ -3,6 +3,7 @@ import { Search, ChefHat, Bell, PackageCheck, ArrowRight } from 'lucide-react'
 import { menuItems } from '../data/menuData.js'
 import ItemCard from '../components/ItemCard.jsx'
 import HeroScene from '../components/HeroScene2D.jsx'
+import Reveal from '../components/anim/Reveal.jsx'
 import { useLanguage } from '../context/LanguageContext.jsx'
 
 export default function Home() {
@@ -21,14 +22,14 @@ export default function Home() {
       <section className="bg-gradient-to-b from-crust-100/70 to-crust-50/30">
         <div className="max-w-6xl mx-auto px-4 py-16 md:py-24 grid md:grid-cols-2 gap-10 items-center">
           <div>
-            <span className="inline-block bg-oven-100 text-oven-700 text-xs font-bold uppercase tracking-wide px-3 py-1 rounded-full mb-4">
+            <span className="anim-rise anim-d-1 inline-block bg-oven-100 text-oven-700 text-xs font-bold uppercase tracking-wide px-3 py-1 rounded-full mb-4">
               {t('home.badge')}
             </span>
-            <h1 className="font-display text-4xl md:text-5xl font-bold text-crust-900 leading-tight">
+            <h1 className="anim-rise anim-d-2 font-display text-4xl md:text-5xl font-bold text-crust-900 leading-tight">
               {t('home.heroTitlePrefix')} <span className="text-oven-600">{t('home.heroTitleHighlight')}</span>
             </h1>
-            <p className="mt-4 text-crust-700 text-lg">{t('home.heroDesc')}</p>
-            <div className="mt-7 flex flex-wrap gap-3">
+            <p className="anim-rise anim-d-3 mt-4 text-crust-700 text-lg">{t('home.heroDesc')}</p>
+            <div className="anim-rise anim-d-4 mt-7 flex flex-wrap gap-3">
               <Link to="/menu" className="flex items-center gap-2 px-6 py-3 rounded-full bg-oven-500 text-white font-semibold hover:bg-oven-600 transition-colors">
                 {t('home.viewMenu')} <ArrowRight size={18} />
               </Link>
@@ -43,7 +44,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="max-w-6xl mx-auto px-4 py-14">
+      <Reveal as="section" className="max-w-6xl mx-auto px-4 py-14">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold">{t('home.bestsellers')}</h2>
           <Link to="/menu" className="text-oven-600 font-semibold text-sm flex items-center gap-1 whitespace-nowrap">
@@ -55,9 +56,9 @@ export default function Home() {
             <ItemCard key={item.id} item={item} />
           ))}
         </div>
-      </section>
+      </Reveal>
 
-      <section className="bg-crust-100 py-14">
+      <Reveal as="section" className="bg-crust-100 py-14">
         <div className="max-w-6xl mx-auto px-4">
           <h2 className="text-2xl font-bold mb-8 text-center">{t('home.howItWorks')}</h2>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -75,15 +76,15 @@ export default function Home() {
             ))}
           </div>
         </div>
-      </section>
+      </Reveal>
 
-      <section className="max-w-6xl mx-auto px-4 py-14 text-center">
+      <Reveal as="section" className="max-w-6xl mx-auto px-4 py-14 text-center">
         <h2 className="text-2xl font-bold mb-2">{t('home.areYouChef')}</h2>
         <p className="text-crust-600 mb-5">{t('home.chefCta')}</p>
         <Link to="/admin/login" className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-crust-800 text-white font-semibold hover:bg-crust-900 transition-colors">
           <ChefHat size={18} /> {t('home.openChefPanel')}
         </Link>
-      </section>
+      </Reveal>
     </div>
   )
 }
