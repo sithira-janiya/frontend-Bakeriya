@@ -7,6 +7,9 @@ import OrderStepper from '../components/OrderStepper.jsx'
 import CookingScene from '../components/CookingScene.jsx'
 import { formatLKR } from '../utils/currency.js'
 
+// Progress-bar fill per order status, driven via transform: scaleX.
+const STATUS_PCT = { pending: 0.25, cooking: 0.5, ready: 0.75, completed: 1 }
+
 export default function OrderStatus() {
   const { orderId } = useParams()
   const navigate = useNavigate()
@@ -163,7 +166,17 @@ export default function OrderStatus() {
       <div className="text-center mb-8">
         <p className="text-xs uppercase tracking-wide font-bold text-crust-400">{t('track.order')}</p>
         <h1 className="text-2xl font-bold font-display">{order.id}</h1>
-        <p className="text-crust-500 text-xs mt-1">{t('track.liveUpdateNote')}</p>
+        <p className="text-crust-500 text-xs mt-1 flex items-center justify-center gap-1.5">
+          <span className="status-dot inline-block w-2 h-2 rounded-full bg-green-500" aria-hidden="true" />
+          {t('track.liveUpdateNote')}
+        </p>
+      </div>
+
+      <div className="h-1.5 rounded-full bg-crust-200 overflow-hidden mb-6" aria-hidden="true">
+        <div
+          className="h-full rounded-full bg-oven-500 track-fill"
+          style={{ transform: `scaleX(${STATUS_PCT[effectiveStatus] ?? 0.25})` }}
+        />
       </div>
 
       <div className="bg-white border border-crust-200 rounded-2xl p-6 mb-6">

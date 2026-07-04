@@ -10,7 +10,7 @@ import ThemeToggle from './ThemeToggle.jsx'
 export default function Navbar() {
   const [open, setOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
-  const { cartCount, isAdmin, currentUser, logout, activeOrders, orderUpdates } = useStore()
+  const { cartCount, isAdmin, currentUser, guestSession, logout, activeOrders, orderUpdates } = useStore()
   const { t } = useLanguage()
 
   // In-progress orders this browser placed, with any live status applied. The
@@ -25,10 +25,11 @@ export default function Navbar() {
     ready: 'bg-green-100 text-green-700 border-green-200'
   }
 
+  // Clears any session (customer/admin/guest) and returns to the login gate.
   function handleLogout() {
     logout()
     setOpen(false)
-    navigate('/')
+    navigate('/login')
   }
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -161,6 +162,11 @@ export default function Navbar() {
                 <LogOut size={18} />
               </button>
             </>
+          ) : guestSession ? (
+            <button onClick={handleLogout} className="flex items-center gap-2 px-4 py-2 rounded-full border border-crust-300 text-crust-800 text-sm font-semibold hover:bg-crust-100 transition-colors whitespace-nowrap">
+              <LogIn size={18} />
+              Sign in
+            </button>
           ) : (
             <NavLink to="/login" className="flex items-center gap-2 px-4 py-2 rounded-full border border-crust-300 text-crust-800 text-sm font-semibold hover:bg-crust-100 transition-colors whitespace-nowrap">
               <LogIn size={18} />
@@ -278,6 +284,11 @@ export default function Navbar() {
                     <LogOut size={18} /> Log out
                   </button>
                 </>
+              ) : guestSession ? (
+                <button onClick={handleLogout} className="flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border border-crust-300 text-crust-800 text-sm font-semibold">
+                  <LogIn size={18} />
+                  Sign in
+                </button>
               ) : (
                 <NavLink to="/login" onClick={() => setOpen(false)} className="flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border border-crust-300 text-crust-800 text-sm font-semibold">
                   <LogIn size={18} />
