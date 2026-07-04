@@ -139,15 +139,31 @@ h1, h2, h3, h4 {
     'Iskoola Pota', sans-serif;
 }
 
-/* Sinhala (සිංහල) text tends to run longer than the equivalent English
-   string. These rules make sure switching languages never breaks layout:
-   text wraps instead of overflowing buttons/cards, and nothing forces a
-   horizontal scrollbar on narrow screens. */
-[lang='si'],
-html[lang='si'] body {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans Sinhala', 'Iskoola Pota',
-    sans-serif;
+/* ---- Sinhala (සිංහල) typography ----
+   Quicksand/Nunito carry no Sinhala glyphs, so Sinhala text is rendered in
+   'Noto Sans Sinhala' (loaded in index.html; its webfont only downloads when
+   Sinhala is actually shown, so English first load stays light). Sinhala
+   ascenders/descenders run taller than Latin, so headings need more
+   line-height than Tailwind's `leading-tight` or glyphs overlap between lines.
+   Everything here is scoped to :lang(si) — the English layout is untouched. */
+:lang(si) {
+  font-family: 'Noto Sans Sinhala', 'Nunito', system-ui, -apple-system, 'Iskoola Pota', sans-serif;
 }
+:lang(si) body {
+  line-height: 1.65;
+}
+:lang(si) h1,
+:lang(si) h2,
+:lang(si) h3,
+:lang(si) h4,
+:lang(si) .font-display {
+  font-family: 'Noto Sans Sinhala', 'Quicksand', system-ui, -apple-system, 'Iskoola Pota', sans-serif;
+  line-height: 1.4 !important; /* override Tailwind leading-tight; stop tall Sinhala glyphs overlapping */
+  letter-spacing: 0;
+}
+
+/* Sinhala strings run longer than English — keep them wrapping inside
+   buttons/inputs instead of overflowing or forcing a horizontal scrollbar. */
 
 button,
 .btn,
