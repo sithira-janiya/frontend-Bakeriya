@@ -394,6 +394,45 @@ export function StoreProvider({ children }) {
     return found || []
   }, [])
 
+  // When a customer is signed in, restore their in-progress orders from the
+  // backend so the navbar live-status pill reappears after logout/login.
+  // `activeOrders` is otherwise browser-local and gets cleared on every auth
+  // change (see clearGuestState), which is why an account's order messages
+  // vanished on re-login. Fetching per-account also keeps one account from
+  // ever showing another's orders. Runs whenever the signed-in email changes.
+  const customerEmail = currentUser?.email
+  useEffect(() => {
+    if (!customerEmail) return
+    let cancelled = false
+    findOrdersByEmail(customerEmail)
+      .then((found) => {
+        if (cancelled) return
+        const inProgress = found.filter((o) => o.status && o.status !== 'completed')
+        if (inProgress.length === 0) return
+        for (const o of inProgress) trackedCodesRef.current.add(o.id)
+        sendTrack(inProgress.map((o) => o.id))
+        setActiveOrders((prev) => {
+          const byId = new Map(prev.map((o) => [o.id, o]))
+          for (const o of inProgress) byId.set(o.id, { id: o.id, status: o.status })
+          return [...byId.values()]
+        })
+        setOrderUpdates((prev) => {
+          const next = { ...prev }
+          for (const o of inProgress) {
+            // Don't clobber a fresher live push we may have already received.
+            if (!next[o.id]) next[o.id] = { status: o.status, at: Date.now() }
+          }
+          return next
+        })
+      })
+      .catch(() => {
+        /* not signed in / network — pill just stays empty until next event */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [customerEmail, findOrdersByEmail, sendTrack])
+
   // ---- Auth (admin + customer share one JWT slot) ----
   // Wipe the browser-local guest identity + order tracking. Guest orders live
   // only in this browser (guest token + activeOrders); they must not bleed into
