@@ -21,7 +21,7 @@ export default function ItemCard({ item }) {
 
   return (
     <div
-      className={`rounded-2xl border border-crust-200 bg-white p-4 flex flex-col gap-3 shadow-sm transition-opacity ${
+      className={`card-lift press rounded-2xl border border-crust-200 bg-white p-4 flex flex-col gap-3 shadow-sm transition-opacity ${
         item.available ? '' : 'opacity-60'
       }`}
     >
@@ -59,7 +59,7 @@ export default function ItemCard({ item }) {
           </div>
           <button
             onClick={handleAdd}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-semibold transition-colors whitespace-nowrap ${
+            className={`press flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-semibold transition-colors whitespace-nowrap ${
               justAdded ? 'bg-green-600 text-white' : 'bg-oven-500 text-white hover:bg-oven-600'
             }`}
           >

@@ -154,7 +154,7 @@ export default function OrderForm() {
           <button
             type="submit"
             disabled={!kitchenActive}
-            className={`mt-2 px-6 py-3 rounded-full text-white font-semibold transition-colors ${
+            className={`press mt-2 px-6 py-3 rounded-full text-white font-semibold transition-colors ${
               kitchenActive ? 'bg-oven-500 hover:bg-oven-600' : 'bg-crust-300 cursor-not-allowed'
             }`}
           >

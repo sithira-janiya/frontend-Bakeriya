@@ -146,7 +146,7 @@ export default function AdminPanel() {
                   <p className="text-xs text-crust-400 text-center py-6">{t('chef.noOrdersHere')}</p>
                 )}
                 {grouped[status].map((order) => (
-                  <div key={order.id} className="bg-white border border-crust-200 rounded-xl p-3 flex flex-col gap-2">
+                  <div key={order.id} className="kanban-enter bg-white border border-crust-200 rounded-xl p-3 flex flex-col gap-2">
                     <div className="flex items-center justify-between">
                       <span className="font-mono text-xs font-bold text-crust-700">{order.id}</span>
                       {display.time && (
@@ -187,7 +187,7 @@ export default function AdminPanel() {
                     {NEXT_STATUS[status] && (
                       <button
                         onClick={() => advance(order.id, NEXT_STATUS[status])}
-                        className="mt-1 px-3 py-2 rounded-full bg-oven-500 text-white text-xs font-semibold hover:bg-oven-600 transition-colors break-words"
+                        className="press mt-1 px-3 py-2 rounded-full bg-oven-500 text-white text-xs font-semibold hover:bg-oven-600 transition-colors break-words"
                       >
                         {t(ACTION_KEY[status])}
                       </button>
@@ -195,7 +195,7 @@ export default function AdminPanel() {
                     {status === 'completed' && (
                       <button
                         onClick={() => removeOrder(order.id)}
-                        className="mt-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-full border border-red-200 text-red-600 text-xs font-semibold hover:bg-red-50 transition-colors"
+                        className="press mt-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-full border border-red-200 text-red-600 text-xs font-semibold hover:bg-red-50 transition-colors"
                       >
                         <Trash2 size={13} /> Remove
                       </button>
