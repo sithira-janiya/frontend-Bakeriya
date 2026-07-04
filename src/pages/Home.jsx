@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { Search, ChefHat, Bell, PackageCheck, ArrowRight } from 'lucide-react'
 import { menuItems } from '../data/menuData.js'
 import ItemCard from '../components/ItemCard.jsx'
-import HeroScene from '../components/three/HeroScene.jsx'
+import HeroScene from '../components/HeroScene2D.jsx'
 import { useLanguage } from '../context/LanguageContext.jsx'
 
 export default function Home() {
@@ -37,7 +37,7 @@ export default function Home() {
               </Link>
             </div>
           </div>
-          <div className="h-72 sm:h-96 md:h-[440px] w-full cursor-grab active:cursor-grabbing">
+          <div className="h-72 sm:h-96 md:h-[440px] w-full">
             <HeroScene />
           </div>
         </div>
