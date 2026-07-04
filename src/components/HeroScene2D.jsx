@@ -1,49 +1,125 @@
-// 2D hero centerpiece for the Home page — pure SVG, no WebGL/three.js.
-// A warm bakery still-life (plate + croissant + cupcake) with rising steam
-// wisps. Entrance is staggered via the shared anim-pop / anim-d-* classes and
-// steam reuses the loader-steam keyframe from animations.css. Everything
-// animates transform/opacity only and honours prefers-reduced-motion (handled
-// by those shared classes). Decorative and non-interactive.
-
+/**
+ * 2D hero illustration: a golden croissant, floating gently, with steam
+ * and twinkles. One coherent SVG in a single viewBox — every part is
+ * positioned relative to the same coordinate space, so nothing can drift
+ * apart. Scales to fill its container on any screen.
+ *
+ * Performance: pure SVG + CSS keyframes (transform/opacity only),
+ * zero JavaScript after mount, zero per-frame work on the main thread.
+ */
 export default function HeroScene2D() {
-  // transform-origin fix so anim-pop scales groups about their own centre.
-  const popOrigin = { transformBox: 'fill-box', transformOrigin: 'center' }
-
   return (
-    <div aria-hidden="true" className="relative h-full w-full select-none">
-      <svg viewBox="0 0 400 400" className="h-full w-full overflow-visible" fill="none">
-        {/* Soft plate glow */}
-        <g className="anim-pop" style={popOrigin}>
-          <ellipse cx="200" cy="330" rx="150" ry="34" fill="rgb(var(--c-200) / 0.7)" />
-          <circle cx="200" cy="200" r="140" fill="rgb(var(--c-100) / 0.55)" />
-        </g>
+    <div
+      className="anim-pop w-full max-w-md mx-auto aspect-square"
+      aria-hidden="true"
+    >
+      <svg
+        viewBox="0 0 400 400"
+        width="100%"
+        height="100%"
+        preserveAspectRatio="xMidYMid meet"
+        role="presentation"
+      >
+        {/* ground shadow — stays put while the croissant floats */}
+        <ellipse
+          className="hero-shadow"
+          cx="200"
+          cy="342"
+          rx="112"
+          ry="15"
+          fill="#8a5a2b"
+        />
 
-        {/* Croissant */}
-        <g className="anim-pop anim-d-2" style={popOrigin} transform="translate(96 176) rotate(-8)">
-          <path
-            d="M8 44C14 20 34 6 62 6c-8 8-11 16-11 26 8-3 16-2 22 3-8 3-13 8-15 16-5-8-13-11-21-11 3 8 3 17-2 25-5-8-14-16-27-16 8-6 15-9 20-11z"
-            transform="scale(1.6)"
-            fill="#e8702a"
-            stroke="#b2430f"
-            strokeWidth="1.2"
-            strokeLinejoin="round"
+        {/* everything below floats together */}
+        <g className="hero-float">
+          {/* steam wisps */}
+          <g stroke="#c9a27a" strokeWidth="6" strokeLinecap="round" fill="none">
+            <path
+              className="hero-steam"
+              d="M158 152 q -10 -14 0 -28 q 10 -14 0 -28"
+            />
+            <path
+              className="hero-steam hero-steam--2"
+              d="M200 142 q -10 -14 0 -28 q 10 -14 0 -28"
+            />
+            <path
+              className="hero-steam hero-steam--3"
+              d="M242 152 q -10 -14 0 -28 q 10 -14 0 -28"
+            />
+          </g>
+
+          {/* twinkles */}
+          <g fill="#e8702a">
+            <path
+              className="hero-spark"
+              d="M108 176 l4 10 10 4 -10 4 -4 10 -4 -10 -10 -4 10 -4 z"
+            />
+            <path
+              className="hero-spark hero-spark--2"
+              d="M300 190 l3 8 8 3 -8 3 -3 8 -3 -8 -8 -3 8 -3 z"
+            />
+          </g>
+
+          {/* croissant — built from overlapping ellipses only */}
+          {/* outer tips */}
+          <ellipse
+            cx="86"
+            cy="288"
+            rx="27"
+            ry="18"
+            fill="#d08a3e"
+            transform="rotate(-38 86 288)"
           />
-        </g>
-
-        {/* Cupcake */}
-        <g className="anim-pop anim-d-3" style={popOrigin} transform="translate(214 150)">
-          <path d="M8 40h64l-10 46a6 6 0 01-6 5H24a6 6 0 01-6-5z" fill="#f6c68a" stroke="#d6551a" strokeWidth="1.4" strokeLinejoin="round" />
-          <path d="M40 4c16 0 30 12 30 26 0 8-6 12-14 12H24c-8 0-14-4-14-12C10 16 24 4 40 4z" fill="#c96b4a" stroke="#8c5524" strokeWidth="1.4" strokeLinejoin="round" />
-          <circle cx="40" cy="8" r="5" fill="#e8702a" />
-        </g>
-
-        {/* Steam wisps — reuse loader-steam (bk-steam) keyframes */}
-        <g stroke="rgb(var(--c-500) / 0.5)" strokeWidth="5" strokeLinecap="round" fill="none">
-          <path className="loader-steam" style={popOrigin} d="M150 120c-8-10 8-18 0-30" />
-          <path className="loader-steam loader-steam--2" style={popOrigin} d="M205 108c-8-10 8-18 0-30" />
-          <path className="loader-steam loader-steam--3" style={popOrigin} d="M258 122c-8-10 8-18 0-30" />
+          <ellipse
+            cx="314"
+            cy="288"
+            rx="27"
+            ry="18"
+            fill="#d08a3e"
+            transform="rotate(38 314 288)"
+          />
+          {/* side lobes */}
+          <ellipse
+            cx="130"
+            cy="264"
+            rx="50"
+            ry="36"
+            fill="#e09a4b"
+            transform="rotate(-20 130 264)"
+          />
+          <ellipse
+            cx="270"
+            cy="264"
+            rx="50"
+            ry="36"
+            fill="#e09a4b"
+            transform="rotate(20 270 264)"
+          />
+          {/* main body */}
+          <ellipse cx="200" cy="248" rx="76" ry="58" fill="#eda95e" />
+          {/* soft top highlight */}
+          <ellipse
+            cx="184"
+            cy="226"
+            rx="40"
+            ry="20"
+            fill="#f6c78d"
+            opacity="0.75"
+          />
+          {/* segment seams */}
+          <g
+            stroke="#c07429"
+            strokeWidth="6"
+            strokeLinecap="round"
+            fill="none"
+            opacity="0.85"
+          >
+            <path d="M152 204 q -12 44 2 84" />
+            <path d="M200 194 q -4 54 2 108" />
+            <path d="M248 204 q 12 44 -2 84" />
+          </g>
         </g>
       </svg>
     </div>
-  )
+  );
 }

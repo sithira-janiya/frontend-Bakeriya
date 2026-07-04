@@ -17,6 +17,9 @@ const StoreContext = createContext(null)
 
 const CART_KEY = 'bakerya_cart'
 const KITCHEN_ACTIVE_KEY = 'bakerya_kitchen_active'
+// Set once a visitor chooses "Continue as guest" on the login gate. Lets them
+// browse/order/track without an account; cleared on logout. Per-browser only.
+const GUEST_KEY = 'bakerya_guest'
 // Orders this browser placed that are still in progress. Powers the navbar
 // live-status pill. Each entry: { id, status }. Pruned once completed.
 const ACTIVE_ORDERS_KEY = 'bakerya_active_orders'
@@ -57,6 +60,7 @@ export function StoreProvider({ children }) {
   const [token, setTokenState] = useState(() => getToken())
   const [authUser, setAuthUser] = useState(null)
   const [authLoading, setAuthLoading] = useState(!!getToken())
+  const [guestSession, setGuestSession] = useState(() => readJSON(GUEST_KEY, false) === true)
 
   const isAdmin = authUser?.role === 'admin'
   const currentUser = authUser?.role === 'customer' ? authUser : null
@@ -391,13 +395,31 @@ export function StoreProvider({ children }) {
   }, [])
 
   // ---- Auth (admin + customer share one JWT slot) ----
-  const applyAuth = useCallback((data) => {
-    setToken(data.token)
-    setTokenState(data.token)
-    const u = data.user ? { ...data.user, role: data.role } : { role: data.role }
-    setAuthUser(u)
-    return data.role
+  // Wipe the browser-local guest identity + order tracking. Guest orders live
+  // only in this browser (guest token + activeOrders); they must not bleed into
+  // a signed-in session, so we clear them on login and on logout.
+  const clearGuestState = useCallback(() => {
+    writeJSON(GUEST_KEY, false)
+    setGuestSession(false)
+    setGuestToken(null)
+    trackedCodesRef.current = new Set()
+    setActiveOrders([])
+    setOrderUpdates({})
   }, [])
+
+  const applyAuth = useCallback(
+    (data) => {
+      setToken(data.token)
+      setTokenState(data.token)
+      const u = data.user ? { ...data.user, role: data.role } : { role: data.role }
+      setAuthUser(u)
+      // Signing in supersedes any guest session — drop the guest's leftover
+      // orders so the real user never sees them.
+      clearGuestState()
+      return data.role
+    },
+    [clearGuestState]
+  )
 
   const login = useCallback(
     async (identifier, password) => applyAuth(await api.login(identifier, password)),
@@ -415,11 +437,19 @@ export function StoreProvider({ children }) {
     async (credential) => applyAuth(await api.googleLogin(credential)),
     [applyAuth]
   )
+  // Enter the storefront as an anonymous guest (no account). Persisted so the
+  // entry gate keeps letting them through across reloads until they log out.
+  const enterAsGuest = useCallback(() => {
+    writeJSON(GUEST_KEY, true)
+    setGuestSession(true)
+  }, [])
+
   const logout = useCallback(() => {
     setToken(null)
     setTokenState(null)
     setAuthUser(null)
-  }, [])
+    clearGuestState()
+  }, [clearGuestState])
 
   const requestPasswordPin = useCallback(() => api.requestPasswordPin(), [])
   const changePassword = useCallback((pin, newPassword) => api.changePassword(pin, newPassword), [])
@@ -459,6 +489,8 @@ export function StoreProvider({ children }) {
     findOrdersByEmail,
     isAdmin,
     currentUser,
+    guestSession,
+    enterAsGuest,
     authLoading,
     login,
     register,

@@ -1,0 +1,235 @@
+/* Bakeriya animation system — transform/opacity only, phone-safe */
+
+:root {
+  --anim-fast: 180ms;
+  --anim-med: 320ms;
+  --anim-slow: 560ms;
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ---------- Keyframes ---------- */
+
+@keyframes bk-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes bk-pop {
+  0%   { opacity: 0; transform: scale(0.94); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes bk-slide-left {
+  from { opacity: 0; transform: translateX(24px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes bk-steam {
+  0%   { opacity: 0;   transform: translateY(6px)  scaleX(1); }
+  35%  { opacity: 0.7; }
+  100% { opacity: 0;   transform: translateY(-16px) scaleX(1.4); }
+}
+
+@keyframes bk-wobble {
+  0%, 100% { transform: rotate(-6deg) translateY(0); }
+  50%      { transform: rotate(6deg)  translateY(-4px); }
+}
+
+@keyframes bk-pulse-dot {
+  0%, 100% { transform: scale(1);    opacity: 1; }
+  50%      { transform: scale(1.35); opacity: 0.55; }
+}
+
+@keyframes bk-progress {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+@keyframes bk-oven-open-top {
+  to { transform: translateY(-101%); }
+}
+@keyframes bk-oven-open-bottom {
+  to { transform: translateY(101%); }
+}
+
+@keyframes bk-shimmer {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(100%); }
+}
+
+/* ---------- Page + section entrances ---------- */
+
+.anim-page {
+  animation: bk-rise var(--anim-med) var(--ease-out-soft) both;
+}
+
+.anim-rise    { animation: bk-rise var(--anim-med) var(--ease-out-soft) both; }
+.anim-pop     { animation: bk-pop  var(--anim-med) var(--ease-spring)  both; }
+.anim-slide-l { animation: bk-slide-left var(--anim-med) var(--ease-out-soft) both; }
+
+.anim-d-1 { animation-delay: 60ms; }
+.anim-d-2 { animation-delay: 120ms; }
+.anim-d-3 { animation-delay: 180ms; }
+.anim-d-4 { animation-delay: 240ms; }
+.anim-d-5 { animation-delay: 300ms; }
+.anim-d-6 { animation-delay: 360ms; }
+
+/* ---------- Scroll reveal (used by <Reveal/>) ---------- */
+
+.reveal {
+  opacity: 0;
+  transform: translateY(16px);
+  transition:
+    opacity var(--anim-slow) var(--ease-out-soft),
+    transform var(--anim-slow) var(--ease-out-soft);
+  transition-delay: var(--reveal-delay, 0ms);
+  will-change: transform, opacity;
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+  will-change: auto;
+}
+
+/* ---------- Micro-interactions ---------- */
+
+.press {
+  transition: transform var(--anim-fast) var(--ease-out-soft);
+}
+.press:active { transform: scale(0.96); }
+
+.card-lift {
+  transition: transform var(--anim-fast) var(--ease-out-soft);
+}
+@media (hover: hover) {
+  .card-lift:hover { transform: translateY(-4px); }
+}
+
+.status-dot { animation: bk-pulse-dot 1.6s ease-in-out infinite; }
+
+.track-fill {
+  transform-origin: left center;
+  transition: transform 600ms var(--ease-out-soft);
+}
+
+.badge-pop { animation: bk-pop var(--anim-fast) var(--ease-spring) both; }
+
+.kanban-enter { animation: bk-slide-left var(--anim-med) var(--ease-out-soft) both; }
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: rgb(var(--c-200) / 1);
+  border-radius: 0.75rem;
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.35), transparent);
+  animation: bk-shimmer 1.2s ease-in-out infinite;
+}
+
+/* ---------- Loading screen ---------- */
+
+.loader-door {
+  will-change: transform;
+  backface-visibility: hidden;
+}
+.loader-door--top.is-opening    { animation: bk-oven-open-top    650ms var(--ease-out-soft) forwards; }
+.loader-door--bottom.is-opening { animation: bk-oven-open-bottom 650ms var(--ease-out-soft) forwards; }
+
+.loader-croissant { animation: bk-wobble 1.4s ease-in-out infinite; display: inline-block; }
+.loader-steam     { animation: bk-steam 1.6s ease-out infinite; }
+.loader-steam--2  { animation-delay: 0.5s; }
+.loader-steam--3  { animation-delay: 1s; }
+.loader-bar       { transform-origin: left center; animation: bk-progress 1.4s var(--ease-out-soft) forwards; }
+
+/* ============================================================
+   HERO SCENE (2D)  — croissant illustration on Home
+   All SVG parts animate with transform/opacity only.
+   transform-box: fill-box makes transform-origin work on SVG
+   elements the same in every browser.
+   ============================================================ */
+
+@keyframes bk-hero-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-8px); }
+}
+
+@keyframes bk-hero-shadow {
+  0%, 100% { transform: scaleX(1);    opacity: 0.25; }
+  50%      { transform: scaleX(0.93); opacity: 0.18; }
+}
+
+@keyframes bk-hero-steam {
+  0%   { opacity: 0;   transform: translateY(10px) scale(0.9); }
+  30%  { opacity: 0.8; }
+  100% { opacity: 0;   transform: translateY(-26px) scale(1.15); }
+}
+
+@keyframes bk-hero-spark {
+  0%, 100% { opacity: 0;   transform: scale(0.4); }
+  50%      { opacity: 0.9; transform: scale(1); }
+}
+
+.hero-float {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: bk-hero-float 6s ease-in-out infinite;
+}
+
+.hero-shadow {
+  transform-box: fill-box;
+  transform-origin: center;
+  opacity: 0.25;
+  animation: bk-hero-shadow 6s ease-in-out infinite;
+}
+
+.hero-steam {
+  transform-box: fill-box;
+  transform-origin: center bottom;
+  animation: bk-hero-steam 2.8s ease-out infinite;
+}
+.hero-steam--2 { animation-delay: 0.9s; }
+.hero-steam--3 { animation-delay: 1.8s; }
+
+.hero-spark {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: bk-hero-spark 3.5s ease-in-out infinite;
+}
+.hero-spark--2 { animation-delay: 1.7s; }
+
+/* ============================================================
+   SCENE BACKGROUND (2D) — faint drifting bakery shapes
+   Very slow, very few, transform-only. Costs ~nothing.
+   ============================================================ */
+
+@keyframes bk-drift {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  50%      { transform: translate(14px, -20px) rotate(6deg); }
+}
+
+.bg-drift {
+  animation: bk-drift 18s ease-in-out infinite;
+  will-change: transform;
+}
+
+/* ---------- Accessibility: reduce motion ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-page, .anim-rise, .anim-pop, .anim-slide-l,
+  .kanban-enter, .badge-pop {
+    animation-duration: 1ms;
+  }
+  .reveal { opacity: 1; transform: none; transition: none; }
+  .loader-croissant, .loader-steam, .status-dot, .skeleton::after,
+  .hero-float, .hero-shadow, .hero-steam, .hero-spark, .bg-drift {
+    animation: none;
+  }
+  .hero-steam, .hero-spark { opacity: 0.4; }
+  .press:active, .card-lift:hover { transform: none; }
+}
