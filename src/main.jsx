@@ -5,6 +5,7 @@ import { GoogleOAuthProvider } from "@react-oauth/google";
 import { Provider } from "react-redux";
 import { store } from "./app/store.js";
 import App from "./App.jsx";
+import ErrorBoundary from "./components/common/ErrorBoundary.jsx";
 import { StoreProvider } from "./context/StoreContext.jsx";
 import { ToastProvider } from "./context/ToastContext.jsx";
 import { LanguageProvider } from "./context/LanguageContext.jsx";
@@ -25,7 +26,9 @@ ReactDOM.createRoot(document.getElementById("root")).render(
             <LanguageProvider>
               <StoreProvider>
                 <ToastProvider>
-                  <App />
+                  <ErrorBoundary>
+                    <App />
+                  </ErrorBoundary>
                 </ToastProvider>
               </StoreProvider>
             </LanguageProvider>

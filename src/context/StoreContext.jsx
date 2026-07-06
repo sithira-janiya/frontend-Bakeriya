@@ -1,6 +1,7 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
-import { api, ApiError, getToken, setToken, setGuestToken, wsUrl } from '../api/client.js'
-import { menuItems as fallbackMenu } from '../data/menuData.js'
+import { createContext, useCallback, useContext, useEffect, useRef } from 'react'
+import { ApiError, setToken, setGuestToken, wsUrl } from '../services/httpClient.js'
+import { orderService } from '../services/orderService.js'
+import { authService } from '../services/authService.js'
 import { useAppDispatch, useAppSelector } from '../app/hooks.js'
 import {
   addToCart as addToCartAction,
@@ -12,26 +13,47 @@ import {
   selectCartTotal
 } from '../features/cart/cartSlice.js'
 import { setKitchenActive as setKitchenActiveAction, selectKitchenActive } from '../features/kitchen/kitchenSlice.js'
+import { fetchMenu, selectMenu, selectMenuLoading } from '../features/menu/menuSlice.js'
+import {
+  authApplied,
+  authCleared,
+  guestEntered,
+  guestSessionCleared,
+  hydrateMe,
+  selectToken,
+  selectAuthLoading,
+  selectGuestSession,
+  selectIsAdmin,
+  selectCurrentUser
+} from '../features/auth/authSlice.js'
+import {
+  ordersListSet,
+  ordersListCleared,
+  orderMerged,
+  orderRemovedFromList,
+  activeOrderUpserted,
+  activeOrdersReconciled,
+  customerOrdersRestored,
+  trackingReset,
+  socketOrderDeleted,
+  socketOrderUpdate,
+  selectOrders,
+  selectOrderUpdates,
+  selectActiveOrders
+} from '../features/orders/ordersSlice.js'
 
 /**
- * App data layer, backed by the Node.js + Pocketbase backend.
+ * Thin app-data facade over the Redux store + the live WebSocket.
  *
- *  - Menu is fetched from GET /api/menu (falls back to the bundled sample menu
- *    if the backend is unreachable, so the storefront still renders).
- *  - Orders are created/read/updated through the REST API.
- *  - A WebSocket (/ws) pushes live order updates: the Chef Panel sees new orders
- *    and the customer Track page sees status changes in real time, no polling.
- *  - Cart stays client-side (localStorage) — it's per-browser until checkout.
+ * State lives in the feature slices (cart/kitchen/menu/auth/orders); async API
+ * calls live in the services layer. This provider only wires them together:
+ * it hosts the realtime socket, runs the effects that can't live in a reducer,
+ * and re-exposes everything through `useStore()` so pages/components are
+ * unchanged. Nothing here throws to the render tree — every async path is
+ * guarded so a failed call degrades gracefully instead of crashing the app.
  */
 
 const StoreContext = createContext(null)
-
-// Set once a visitor chooses "Continue as guest" on the login gate. Lets them
-// browse/order/track without an account; cleared on logout. Per-browser only.
-const GUEST_KEY = 'bakerya_guest'
-// Orders this browser placed that are still in progress. Powers the navbar
-// live-status pill. Each entry: { id, status }. Pruned once completed.
-const ACTIVE_ORDERS_KEY = 'bakerya_active_orders'
 
 export const ORDER_STEPS = ['pending', 'cooking', 'ready', 'completed']
 export const STEP_LABELS = {
@@ -41,71 +63,39 @@ export const STEP_LABELS = {
   completed: 'Collected'
 }
 
-function readJSON(key, fallback) {
-  try {
-    const raw = localStorage.getItem(key)
-    return raw ? JSON.parse(raw) : fallback
-  } catch {
-    return fallback
-  }
-}
-
-function writeJSON(key, value) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value))
-  } catch {
-    /* storage unavailable — ignore */
-  }
-}
-
 export function StoreProvider({ children }) {
   const dispatch = useAppDispatch()
-  // Cart + kitchen state live in Redux (features/cart, features/kitchen); read
-  // them here so the rest of the store logic (placeOrder, cart totals) is
-  // unchanged and useStore() keeps exposing the same surface to pages.
+
+  // ---- Slice state (single source of truth) ----
   const cart = useAppSelector(selectCart)
   const cartCount = useAppSelector(selectCartCount)
   const cartTotal = useAppSelector(selectCartTotal)
   const kitchenActive = useAppSelector(selectKitchenActive)
-  const [menu, setMenu] = useState([])
-  const [menuLoading, setMenuLoading] = useState(true)
-  const [orders, setOrders] = useState([])
-  const [orderUpdates, setOrderUpdates] = useState({}) // code -> { status, at }
-  const [activeOrders, setActiveOrders] = useState(() => readJSON(ACTIVE_ORDERS_KEY, []))
-  const [token, setTokenState] = useState(() => getToken())
-  const [authUser, setAuthUser] = useState(null)
-  const [authLoading, setAuthLoading] = useState(!!getToken())
-  const [guestSession, setGuestSession] = useState(() => readJSON(GUEST_KEY, false) === true)
-
-  const isAdmin = authUser?.role === 'admin'
-  const currentUser = authUser?.role === 'customer' ? authUser : null
+  const menu = useAppSelector(selectMenu)
+  const menuLoading = useAppSelector(selectMenuLoading)
+  const orders = useAppSelector(selectOrders)
+  const orderUpdates = useAppSelector(selectOrderUpdates)
+  const activeOrders = useAppSelector(selectActiveOrders)
+  const token = useAppSelector(selectToken)
+  const authLoading = useAppSelector(selectAuthLoading)
+  const guestSession = useAppSelector(selectGuestSession)
+  const isAdmin = useAppSelector(selectIsAdmin)
+  const currentUser = useAppSelector(selectCurrentUser)
 
   const socketRef = useRef(null)
   const authRef = useRef({ token, isAdmin })
   authRef.current = { token, isAdmin }
-  // Order codes this browser follows over the WebSocket. Seeded from the
+  // Order codes this browser follows over the WebSocket. Seeded once from the
   // persisted active orders; the server only streams status for codes we send.
-  const trackedCodesRef = useRef(new Set(activeOrders.map((o) => o.id)))
+  const trackedCodesRef = useRef(null)
+  if (trackedCodesRef.current === null) {
+    trackedCodesRef.current = new Set(activeOrders.map((o) => o.id))
+  }
 
   // ---- Menu ----
   useEffect(() => {
-    let cancelled = false
-    setMenuLoading(true)
-    api
-      .getMenu()
-      .then((data) => {
-        if (!cancelled) setMenu(data.items || [])
-      })
-      .catch(() => {
-        if (!cancelled) setMenu(fallbackMenu) // offline / backend down
-      })
-      .finally(() => {
-        if (!cancelled) setMenuLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
+    dispatch(fetchMenu())
+  }, [dispatch])
 
   // ---- WebSocket live updates ----
   useEffect(() => {
@@ -142,32 +132,12 @@ export function StoreProvider({ children }) {
         if (msg.type === 'order:deleted') {
           // An admin cleared a collected order — drop it everywhere.
           const code = msg.order?.id ?? msg.code
-          if (code) {
-            setOrders((prev) => prev.filter((o) => o.id !== code))
-            setActiveOrders((prev) => prev.filter((o) => o.id !== code))
-            setOrderUpdates((prev) => {
-              if (!(code in prev)) return prev
-              const next = { ...prev }
-              delete next[code]
-              return next
-            })
-          }
+          if (code) dispatch(socketOrderDeleted(code))
         } else if (msg.type === 'order:created' || msg.type === 'order:updated') {
           // code+status arrives for everyone (lite); full order only for admins.
           const code = msg.order?.id ?? msg.code
           const status = msg.order?.status ?? msg.status
-          if (code && status) {
-            setOrderUpdates((prev) => ({ ...prev, [code]: { status, at: Date.now() } }))
-            // Keep the navbar's active-order list in sync; drop it once collected.
-            setActiveOrders((prev) => {
-              if (!prev.some((o) => o.id === code)) return prev
-              if (status === 'completed') return prev.filter((o) => o.id !== code)
-              return prev.map((o) => (o.id === code ? { ...o, status } : o))
-            })
-          }
-          if (msg.order) {
-            setOrders((prev) => mergeOrder(prev, msg.order))
-          }
+          dispatch(socketOrderUpdate({ code, status, order: msg.order }))
         }
       }
 
@@ -193,42 +163,21 @@ export function StoreProvider({ children }) {
         /* ignore */
       }
     }
-  }, [])
+  }, [dispatch])
 
   // Hydrate the signed-in principal from the stored token (validates it too).
   useEffect(() => {
     if (!token) {
-      setAuthUser(null)
-      setAuthLoading(false)
+      dispatch(authCleared())
       return
     }
-    let cancelled = false
-    setAuthLoading(true)
-    api
-      .me()
-      .then((data) => {
-        if (cancelled) return
-        const u = data.user || {}
-        setAuthUser(u.role ? u : { ...u, role: 'customer' })
-      })
-      .catch(() => {
-        if (cancelled) return
-        setToken(null)
-        setTokenState(null)
-        setAuthUser(null)
-      })
-      .finally(() => {
-        if (!cancelled) setAuthLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [token])
+    dispatch(hydrateMe())
+  }, [token, dispatch])
 
   // When an admin is signed in, fetch the full order list and authenticate the socket.
   useEffect(() => {
     if (!isAdmin) {
-      setOrders([])
+      dispatch(ordersListCleared())
       return
     }
     const socket = socketRef.current
@@ -236,10 +185,10 @@ export function StoreProvider({ children }) {
       socket.send(JSON.stringify({ type: 'auth', token }))
     }
     let cancelled = false
-    api
+    orderService
       .listOrders()
       .then((data) => {
-        if (!cancelled) setOrders(data.orders || [])
+        if (!cancelled) dispatch(ordersListSet(data?.orders || []))
       })
       .catch(() => {
         /* token may have expired — leave list empty */
@@ -247,11 +196,7 @@ export function StoreProvider({ children }) {
     return () => {
       cancelled = true
     }
-  }, [isAdmin, token])
-
-  useEffect(() => {
-    writeJSON(ACTIVE_ORDERS_KEY, activeOrders)
-  }, [activeOrders])
+  }, [isAdmin, token, dispatch])
 
   // On load, refresh each tracked order's status once (WebSocket only pushes
   // future changes) and prune any that are gone or already collected.
@@ -261,25 +206,17 @@ export function StoreProvider({ children }) {
     let cancelled = false
     Promise.all(
       ids.map((id) =>
-        api
+        orderService
           .getOrder(id)
-          .then((d) => ({ id, status: d.order?.status }))
+          .then((d) => ({ id, status: d?.order?.status }))
           .catch((err) => ({ id, gone: err instanceof ApiError && err.status === 404 }))
       )
     ).then((results) => {
       if (cancelled) return
-      setActiveOrders((prev) => {
-        let next = prev
-        for (const r of results) {
-          if (r.gone || r.status === 'completed') {
-            next = next.filter((o) => o.id !== r.id)
-            trackedCodesRef.current.delete(r.id)
-          } else if (r.status) {
-            next = next.map((o) => (o.id === r.id ? { ...o, status: r.status } : o))
-          }
-        }
-        return next
-      })
+      dispatch(activeOrdersReconciled(results))
+      for (const r of results) {
+        if (r.gone || r.status === 'completed') trackedCodesRef.current.delete(r.id)
+      }
     })
     return () => {
       cancelled = true
@@ -288,7 +225,7 @@ export function StoreProvider({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // ---- Cart (client-side, Redux-backed) ----
+  // ---- Cart (Redux-backed) ----
   const addToCart = useCallback((item, qty = 1) => dispatch(addToCartAction(item, qty)), [dispatch])
   const updateCartQty = useCallback((id, qty) => dispatch(updateCartQtyAction(id, qty)), [dispatch])
   const removeFromCart = useCallback((id) => dispatch(removeFromCartAction(id)), [dispatch])
@@ -296,7 +233,7 @@ export function StoreProvider({ children }) {
 
   const setKitchenActive = useCallback((active) => dispatch(setKitchenActiveAction(active)), [dispatch])
 
-  // ---- Orders (backend) ----
+  // ---- Orders (backend + realtime) ----
   // Subscribe this browser to live status for an order code (idempotent).
   const sendTrack = useCallback((codes) => {
     const socket = socketRef.current
@@ -320,13 +257,9 @@ export function StoreProvider({ children }) {
       if (!order?.id) return
       trackedCodesRef.current.add(order.id)
       sendTrack([order.id])
-      setActiveOrders((prev) => {
-        const rest = prev.filter((o) => o.id !== order.id)
-        if (order.status === 'completed') return rest
-        return [{ id: order.id, status: order.status }, ...rest]
-      })
+      dispatch(activeOrderUpserted({ id: order.id, status: order.status }))
     },
-    [sendTrack]
+    [dispatch, sendTrack]
   )
 
   // Returns the new order id on success; throws ApiError on failure.
@@ -338,35 +271,41 @@ export function StoreProvider({ children }) {
         customer,
         items: cart.map((c) => ({ id: c.id, name: c.name, price: c.price, qty: c.qty }))
       }
-      const { order, guestToken } = await api.placeOrder(payload)
+      const { order, guestToken } = await orderService.placeOrder(payload)
       // Guests get a per-browser token so only they can reopen this order.
       if (guestToken) setGuestToken(guestToken)
       upsertActiveOrder(order)
-      clearCart()
+      dispatch(clearCartAction())
       return order.id
     },
-    [cart, clearCart, kitchenActive, upsertActiveOrder]
+    [cart, dispatch, kitchenActive, upsertActiveOrder]
   )
 
-  const updateOrderStatus = useCallback(async (orderId, status) => {
-    const { order } = await api.updateOrderStatus(orderId, status)
-    setOrders((prev) => mergeOrder(prev, order))
-    return order
-  }, [])
+  const updateOrderStatus = useCallback(
+    async (orderId, status) => {
+      const { order } = await orderService.updateOrderStatus(orderId, status)
+      dispatch(orderMerged(order))
+      return order
+    },
+    [dispatch]
+  )
 
   // Admin end-of-day cleanup: permanently remove a collected order. The backend
   // frees the record and broadcasts order:deleted, but we also drop it locally
   // so the initiating admin sees it vanish immediately.
-  const deleteOrder = useCallback(async (orderId) => {
-    await api.deleteOrder(orderId)
-    setOrders((prev) => prev.filter((o) => o.id !== orderId))
-    return true
-  }, [])
+  const deleteOrder = useCallback(
+    async (orderId) => {
+      await orderService.deleteOrder(orderId)
+      dispatch(orderRemovedFromList(orderId))
+      return true
+    },
+    [dispatch]
+  )
 
   // Async lookups for the Track page.
   const fetchOrder = useCallback(async (code) => {
     try {
-      const { order } = await api.getOrder(code)
+      const { order } = await orderService.getOrder(code)
       return order
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) return null
@@ -375,40 +314,30 @@ export function StoreProvider({ children }) {
   }, [])
 
   const findOrdersByEmail = useCallback(async (email) => {
-    const { orders: found } = await api.findOrdersByEmail(email)
+    const { orders: found } = await orderService.findOrdersByEmail(email)
     return found || []
   }, [])
 
   // When a customer is signed in, restore their in-progress orders from the
   // backend so the navbar live-status pill reappears after logout/login.
   // `activeOrders` is otherwise browser-local and gets cleared on every auth
-  // change (see clearGuestState), which is why an account's order messages
-  // vanished on re-login. Fetching per-account also keeps one account from
-  // ever showing another's orders. Runs whenever the signed-in email changes.
+  // change (clearGuestState), which is why an account's order messages vanished
+  // on re-login. Fetching per-account also keeps one account from ever showing
+  // another's orders. Runs whenever the signed-in email changes.
   const customerEmail = currentUser?.email
   useEffect(() => {
     if (!customerEmail) return
     let cancelled = false
-    findOrdersByEmail(customerEmail)
-      .then((found) => {
+    orderService
+      .findOrdersByEmail(customerEmail)
+      .then((res) => {
         if (cancelled) return
+        const found = res?.orders || []
         const inProgress = found.filter((o) => o.status && o.status !== 'completed')
         if (inProgress.length === 0) return
         for (const o of inProgress) trackedCodesRef.current.add(o.id)
         sendTrack(inProgress.map((o) => o.id))
-        setActiveOrders((prev) => {
-          const byId = new Map(prev.map((o) => [o.id, o]))
-          for (const o of inProgress) byId.set(o.id, { id: o.id, status: o.status })
-          return [...byId.values()]
-        })
-        setOrderUpdates((prev) => {
-          const next = { ...prev }
-          for (const o of inProgress) {
-            // Don't clobber a fresher live push we may have already received.
-            if (!next[o.id]) next[o.id] = { status: o.status, at: Date.now() }
-          }
-          return next
-        })
+        dispatch(customerOrdersRestored(inProgress.map((o) => ({ id: o.id, status: o.status }))))
       })
       .catch(() => {
         /* not signed in / network — pill just stays empty until next event */
@@ -416,70 +345,63 @@ export function StoreProvider({ children }) {
     return () => {
       cancelled = true
     }
-  }, [customerEmail, findOrdersByEmail, sendTrack])
+  }, [customerEmail, dispatch, sendTrack])
 
   // ---- Auth (admin + customer share one JWT slot) ----
   // Wipe the browser-local guest identity + order tracking. Guest orders live
   // only in this browser (guest token + activeOrders); they must not bleed into
   // a signed-in session, so we clear them on login and on logout.
   const clearGuestState = useCallback(() => {
-    writeJSON(GUEST_KEY, false)
-    setGuestSession(false)
     setGuestToken(null)
     trackedCodesRef.current = new Set()
-    setActiveOrders([])
-    setOrderUpdates({})
-  }, [])
+    dispatch(guestSessionCleared())
+    dispatch(trackingReset())
+  }, [dispatch])
 
   const applyAuth = useCallback(
     (data) => {
       setToken(data.token)
-      setTokenState(data.token)
-      const u = data.user ? { ...data.user, role: data.role } : { role: data.role }
-      setAuthUser(u)
+      const user = data.user ? { ...data.user, role: data.role } : { role: data.role }
+      dispatch(authApplied({ token: data.token, user }))
       // Signing in supersedes any guest session — drop the guest's leftover
       // orders so the real user never sees them.
       clearGuestState()
       return data.role
     },
-    [clearGuestState]
+    [dispatch, clearGuestState]
   )
 
   const login = useCallback(
-    async (identifier, password) => applyAuth(await api.login(identifier, password)),
+    async (identifier, password) => applyAuth(await authService.login(identifier, password)),
     [applyAuth]
   )
   // Registration no longer signs you in — it returns { pendingVerification, email }.
   // The account is inert until the emailed code is confirmed via verifyEmail.
-  const register = useCallback((payload) => api.register(payload), [])
+  const register = useCallback((payload) => authService.register(payload), [])
   const verifyEmail = useCallback(
-    async (email, code) => applyAuth(await api.verifyEmail(email, code)),
+    async (email, code) => applyAuth(await authService.verifyEmail(email, code)),
     [applyAuth]
   )
-  const resendVerification = useCallback((email) => api.resendVerification(email), [])
+  const resendVerification = useCallback((email) => authService.resendVerification(email), [])
   const googleLogin = useCallback(
-    async (credential) => applyAuth(await api.googleLogin(credential)),
+    async (credential) => applyAuth(await authService.googleLogin(credential)),
     [applyAuth]
   )
   // Enter the storefront as an anonymous guest (no account). Persisted so the
   // entry gate keeps letting them through across reloads until they log out.
-  const enterAsGuest = useCallback(() => {
-    writeJSON(GUEST_KEY, true)
-    setGuestSession(true)
-  }, [])
+  const enterAsGuest = useCallback(() => dispatch(guestEntered()), [dispatch])
 
   const logout = useCallback(() => {
     setToken(null)
-    setTokenState(null)
-    setAuthUser(null)
+    dispatch(authCleared())
     clearGuestState()
-  }, [clearGuestState])
+  }, [dispatch, clearGuestState])
 
-  const requestPasswordPin = useCallback(() => api.requestPasswordPin(), [])
-  const changePassword = useCallback((pin, newPassword) => api.changePassword(pin, newPassword), [])
+  const requestPasswordPin = useCallback(() => authService.requestPasswordPin(), [])
+  const changePassword = useCallback((pin, newPassword) => authService.changePassword(pin, newPassword), [])
 
-  // Legacy aliases — existing admin pages keep working until Phase 3 moves them
-  // to the unified /login page. Admin signs in with username `admin` + password.
+  // Legacy aliases — existing admin pages keep working. Admin signs in with
+  // username `admin` + password.
   const loginAdmin = useCallback(
     async (secret) => {
       try {
@@ -531,14 +453,6 @@ export function StoreProvider({ children }) {
   }
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
-}
-
-function mergeOrder(list, order) {
-  const idx = list.findIndex((o) => o.id === order.id)
-  if (idx === -1) return [order, ...list]
-  const next = [...list]
-  next[idx] = order
-  return next
 }
 
 export function useStore() {
