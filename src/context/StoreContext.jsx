@@ -1,6 +1,17 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { api, ApiError, getToken, setToken, setGuestToken, wsUrl } from '../api/client.js'
 import { menuItems as fallbackMenu } from '../data/menuData.js'
+import { useAppDispatch, useAppSelector } from '../app/hooks.js'
+import {
+  addToCart as addToCartAction,
+  updateCartQty as updateCartQtyAction,
+  removeFromCart as removeFromCartAction,
+  clearCart as clearCartAction,
+  selectCart,
+  selectCartCount,
+  selectCartTotal
+} from '../features/cart/cartSlice.js'
+import { setKitchenActive as setKitchenActiveAction, selectKitchenActive } from '../features/kitchen/kitchenSlice.js'
 
 /**
  * App data layer, backed by the Node.js + Pocketbase backend.
@@ -15,8 +26,6 @@ import { menuItems as fallbackMenu } from '../data/menuData.js'
 
 const StoreContext = createContext(null)
 
-const CART_KEY = 'bakerya_cart'
-const KITCHEN_ACTIVE_KEY = 'bakerya_kitchen_active'
 // Set once a visitor chooses "Continue as guest" on the login gate. Lets them
 // browse/order/track without an account; cleared on logout. Per-browser only.
 const GUEST_KEY = 'bakerya_guest'
@@ -50,8 +59,14 @@ function writeJSON(key, value) {
 }
 
 export function StoreProvider({ children }) {
-  const [cart, setCart] = useState(() => readJSON(CART_KEY, []))
-  const [kitchenActive, setKitchenActiveState] = useState(() => readJSON(KITCHEN_ACTIVE_KEY, true))
+  const dispatch = useAppDispatch()
+  // Cart + kitchen state live in Redux (features/cart, features/kitchen); read
+  // them here so the rest of the store logic (placeOrder, cart totals) is
+  // unchanged and useStore() keeps exposing the same surface to pages.
+  const cart = useAppSelector(selectCart)
+  const cartCount = useAppSelector(selectCartCount)
+  const cartTotal = useAppSelector(selectCartTotal)
+  const kitchenActive = useAppSelector(selectKitchenActive)
   const [menu, setMenu] = useState([])
   const [menuLoading, setMenuLoading] = useState(true)
   const [orders, setOrders] = useState([])
@@ -235,14 +250,6 @@ export function StoreProvider({ children }) {
   }, [isAdmin, token])
 
   useEffect(() => {
-    writeJSON(CART_KEY, cart)
-  }, [cart])
-
-  useEffect(() => {
-    writeJSON(KITCHEN_ACTIVE_KEY, kitchenActive)
-  }, [kitchenActive])
-
-  useEffect(() => {
     writeJSON(ACTIVE_ORDERS_KEY, activeOrders)
   }, [activeOrders])
 
@@ -281,35 +288,13 @@ export function StoreProvider({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // ---- Cart (client-side) ----
-  const addToCart = useCallback((item, qty = 1) => {
-    const name = typeof item.name === 'object' ? item.name : { en: item.name }
-    setCart((prev) => {
-      const existing = prev.find((c) => c.id === item.id)
-      if (existing) {
-        return prev.map((c) => (c.id === item.id ? { ...c, qty: c.qty + qty } : c))
-      }
-      return [...prev, { id: item.id, name, price: item.price, emoji: item.emoji, qty }]
-    })
-  }, [])
+  // ---- Cart (client-side, Redux-backed) ----
+  const addToCart = useCallback((item, qty = 1) => dispatch(addToCartAction(item, qty)), [dispatch])
+  const updateCartQty = useCallback((id, qty) => dispatch(updateCartQtyAction(id, qty)), [dispatch])
+  const removeFromCart = useCallback((id) => dispatch(removeFromCartAction(id)), [dispatch])
+  const clearCart = useCallback(() => dispatch(clearCartAction()), [dispatch])
 
-  const updateCartQty = useCallback((id, qty) => {
-    setCart((prev) => {
-      if (qty <= 0) return prev.filter((c) => c.id !== id)
-      return prev.map((c) => (c.id === id ? { ...c, qty } : c))
-    })
-  }, [])
-
-  const removeFromCart = useCallback((id) => {
-    setCart((prev) => prev.filter((c) => c.id !== id))
-  }, [])
-
-  const clearCart = useCallback(() => setCart([]), [])
-
-  const setKitchenActive = useCallback((active) => setKitchenActiveState(Boolean(active)), [])
-
-  const cartCount = useMemo(() => cart.reduce((sum, c) => sum + c.qty, 0), [cart])
-  const cartTotal = useMemo(() => cart.reduce((sum, c) => sum + c.qty * c.price, 0), [cart])
+  const setKitchenActive = useCallback((active) => dispatch(setKitchenActiveAction(active)), [dispatch])
 
   // ---- Orders (backend) ----
   // Subscribe this browser to live status for an order code (idempotent).

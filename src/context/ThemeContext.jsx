@@ -1,46 +1,45 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react'
+import { useEffect, useMemo } from 'react'
+import { useAppDispatch, useAppSelector } from '../app/hooks.js'
+import {
+  selectTheme,
+  setTheme as setThemeAction,
+  toggleTheme as toggleThemeAction,
+  THEME_STORAGE_KEY
+} from '../features/theme/themeSlice.js'
 
 /**
- * Light/dark theme. Toggles a `.dark` class on <html> (Tailwind darkMode:'class'
- * + CSS variables do the actual reskin). Persists to localStorage and falls back
- * to the OS preference on first visit.
+ * Theme is Redux-backed now (see features/theme/themeSlice.js). These exports
+ * are kept so existing imports — `import { useTheme } from
+ * '../context/ThemeContext.jsx'` — keep working unchanged.
+ *
+ * ThemeProvider no longer holds state; it just runs the DOM/localStorage side
+ * effect whenever the selected theme changes.
  */
 
-const ThemeContext = createContext(null)
-const THEME_KEY = 'bakeryaTheme'
-
-function readStoredTheme() {
-  try {
-    const s = localStorage.getItem(THEME_KEY)
-    if (s === 'light' || s === 'dark') return s
-  } catch {
-    /* ignore */
-  }
-  if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches) {
-    return 'dark'
-  }
-  return 'light'
-}
-
 export function ThemeProvider({ children }) {
-  const [theme, setTheme] = useState(readStoredTheme)
+  const theme = useAppSelector(selectTheme)
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
     try {
-      localStorage.setItem(THEME_KEY, theme)
+      localStorage.setItem(THEME_STORAGE_KEY, theme)
     } catch {
       /* ignore */
     }
   }, [theme])
 
-  const toggleTheme = useCallback(() => setTheme((t) => (t === 'dark' ? 'light' : 'dark')), [])
-
-  return <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>{children}</ThemeContext.Provider>
+  return children
 }
 
 export function useTheme() {
-  const ctx = useContext(ThemeContext)
-  if (!ctx) throw new Error('useTheme must be used within a ThemeProvider')
-  return ctx
+  const theme = useAppSelector(selectTheme)
+  const dispatch = useAppDispatch()
+  return useMemo(
+    () => ({
+      theme,
+      setTheme: (next) => dispatch(setThemeAction(next)),
+      toggleTheme: () => dispatch(toggleThemeAction())
+    }),
+    [theme, dispatch]
+  )
 }

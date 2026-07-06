@@ -4,6 +4,7 @@ import Layout from "./components/Layout.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import RequireEntry from "./components/RequireEntry.jsx";
 import LoadingScreen from "./components/LoadingScreen.jsx";
+import OrderStatusToaster from "./components/OrderStatusToaster.jsx";
 import PageTransition from "./components/anim/PageTransition.jsx";
 import { useLanguage } from "./context/LanguageContext.jsx";
 import Home from "./pages/Home.jsx";
@@ -35,7 +36,9 @@ export default function App() {
   }
 
   return (
-    <Routes>
+    <>
+      <OrderStatusToaster />
+      <Routes>
       {/* Auth pages render full-screen (no navbar/footer) so the 2D login
           animation owns the viewport. They get their own entrance. */}
       <Route
@@ -84,6 +87,7 @@ export default function App() {
         />
         <Route path="*" element={<NotFound />} />
       </Route>
-    </Routes>
+      </Routes>
+    </>
   );
 }
