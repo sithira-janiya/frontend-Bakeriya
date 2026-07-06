@@ -26,7 +26,15 @@ export default function ItemCard({ item }) {
       }`}
     >
       <div className="flex items-start justify-between gap-2">
-        <div className="text-4xl">{item.emoji}</div>
+        {item.image ? (
+          <img
+            src={item.image}
+            alt={name}
+            className="w-16 h-16 rounded-xl object-cover border border-crust-200"
+          />
+        ) : (
+          <div className="text-4xl">{item.emoji}</div>
+        )}
         <div className="text-right">
           <div className="font-display font-bold text-oven-600">{formatLKR(item.price)}</div>
           {!item.available && <div className="text-xs font-semibold text-crust-500">{t('item.soldOut')}</div>}

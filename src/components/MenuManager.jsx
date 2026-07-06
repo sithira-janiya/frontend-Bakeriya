@@ -1,7 +1,33 @@
 import { useEffect, useState } from 'react'
-import { Plus, Trash2, Eye, EyeOff, RefreshCw } from 'lucide-react'
+import { Plus, Trash2, Eye, EyeOff, RefreshCw, ImagePlus, X } from 'lucide-react'
 import { api } from '../api/client.js'
 import { formatLKR } from '../utils/currency.js'
+
+// Read a chosen .png/.jpeg file and downscale it to a compressed JPEG data-URL
+// so the payload stays small (menu photos are decorative thumbnails, not prints).
+function compressImage(file, maxSize = 800, quality = 0.8) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = () => reject(new Error('Could not read the image file'))
+    reader.onload = () => {
+      const img = new Image()
+      img.onerror = () => reject(new Error('That file is not a valid image'))
+      img.onload = () => {
+        const scale = Math.min(1, maxSize / Math.max(img.width, img.height))
+        const w = Math.round(img.width * scale)
+        const h = Math.round(img.height * scale)
+        const canvas = document.createElement('canvas')
+        canvas.width = w
+        canvas.height = h
+        const ctx = canvas.getContext('2d')
+        ctx.drawImage(img, 0, 0, w, h)
+        resolve(canvas.toDataURL('image/jpeg', quality))
+      }
+      img.src = reader.result
+    }
+    reader.readAsDataURL(file)
+  })
+}
 
 // Chef-facing menu management (add / remove items, toggle availability).
 // Labels are plain English by design — this is an admin-only surface.
@@ -15,6 +41,7 @@ const EMPTY_FORM = {
   descEn: '',
   descSi: '',
   tags: '',
+  image: '',
   available: true
 }
 
@@ -75,6 +102,23 @@ export default function MenuManager() {
     }
   }
 
+  async function pickImage(e) {
+    const file = e.target.files?.[0]
+    e.target.value = '' // allow re-selecting the same file later
+    if (!file) return
+    if (!/^image\/(png|jpe?g)$/.test(file.type)) {
+      setError('Please choose a .png or .jpeg image')
+      return
+    }
+    setError('')
+    try {
+      const dataUrl = await compressImage(file)
+      setForm((f) => ({ ...f, image: dataUrl }))
+    } catch (err) {
+      setError(err.message || 'Could not process the image')
+    }
+  }
+
   async function addItem(e) {
     e.preventDefault()
     if (!form.nameEn.trim()) {
@@ -89,6 +133,7 @@ export default function MenuManager() {
         category: form.category.trim() || 'Other',
         price: Number(form.price) || 0,
         emoji: form.emoji.trim() || '🍞',
+        image: form.image || '',
         description: { en: form.descEn.trim(), si: form.descSi.trim() || form.descEn.trim() },
         tags: form.tags
           .split(',')
@@ -177,6 +222,36 @@ export default function MenuManager() {
             onChange={(e) => setForm({ ...form, descSi: e.target.value })}
           />
         </div>
+        {/* Photo (optional) */}
+        <div className="flex items-center gap-3">
+          {form.image ? (
+            <div className="relative">
+              <img
+                src={form.image}
+                alt="Preview"
+                className="w-16 h-16 rounded-lg object-cover border border-crust-200"
+              />
+              <button
+                type="button"
+                onClick={() => setForm((f) => ({ ...f, image: '' }))}
+                className="absolute -top-2 -right-2 bg-white border border-crust-300 rounded-full p-0.5 text-crust-600 hover:text-red-500 shadow-sm"
+                aria-label="Remove image"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          ) : (
+            <div className="w-16 h-16 rounded-lg border border-dashed border-crust-300 flex items-center justify-center text-2xl">
+              {form.emoji || '🍞'}
+            </div>
+          )}
+          <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-crust-300 text-sm text-crust-700 hover:bg-crust-50">
+            <ImagePlus size={16} />
+            {form.image ? 'Change photo' : 'Add photo (.png / .jpeg)'}
+            <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={pickImage} />
+          </label>
+        </div>
+
         <label className="flex items-center gap-2 text-sm text-crust-700">
           <input
             type="checkbox"
@@ -216,7 +291,15 @@ export default function MenuManager() {
                 item.available ? 'border-crust-200' : 'border-crust-200 opacity-60'
               }`}
             >
-              <span className="text-2xl shrink-0">{item.emoji}</span>
+              {item.image ? (
+                <img
+                  src={item.image}
+                  alt={item.name?.en || ''}
+                  className="w-11 h-11 rounded-lg object-cover shrink-0 border border-crust-200"
+                />
+              ) : (
+                <span className="text-2xl shrink-0 w-11 h-11 flex items-center justify-center">{item.emoji}</span>
+              )}
               <div className="min-w-0 flex-1">
                 <div className="font-semibold text-sm text-crust-900 truncate">{item.name?.en || item.id}</div>
                 <div className="text-xs text-crust-500 truncate">
