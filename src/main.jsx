@@ -2,8 +2,11 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { GoogleOAuthProvider } from "@react-oauth/google";
+import { Provider } from "react-redux";
+import { store } from "./app/store.js";
 import App from "./App.jsx";
 import { StoreProvider } from "./context/StoreContext.jsx";
+import { ToastProvider } from "./context/ToastContext.jsx";
 import { LanguageProvider } from "./context/LanguageContext.jsx";
 import { ThemeProvider } from "./context/ThemeContext.jsx";
 import "./index.css";
@@ -15,16 +18,20 @@ const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <GoogleOAuthProvider clientId={googleClientId}>
-      <BrowserRouter>
-        <ThemeProvider>
-          <LanguageProvider>
-            <StoreProvider>
-              <App />
-            </StoreProvider>
-          </LanguageProvider>
-        </ThemeProvider>
-      </BrowserRouter>
-    </GoogleOAuthProvider>
+    <Provider store={store}>
+      <GoogleOAuthProvider clientId={googleClientId}>
+        <BrowserRouter>
+          <ThemeProvider>
+            <LanguageProvider>
+              <StoreProvider>
+                <ToastProvider>
+                  <App />
+                </ToastProvider>
+              </StoreProvider>
+            </LanguageProvider>
+          </ThemeProvider>
+        </BrowserRouter>
+      </GoogleOAuthProvider>
+    </Provider>
   </React.StrictMode>,
 );
